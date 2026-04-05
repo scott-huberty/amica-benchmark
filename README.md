@@ -68,6 +68,12 @@ python scripts/run_mica_python.py --dataset-set ~/amica_test_data/mica_release/d
 ./scripts/pull_fortran_image.sh shuberty/amica:latest
 ```
 
+For cluster / Apptainer workflows:
+
+```bash
+RUNTIME=apptainer ./scripts/pull_fortran_image.sh shuberty/amica:latest /path/to/save/your/containers/amica.sif
+```
+
 ## Single-dataset runners
 
 ```bash

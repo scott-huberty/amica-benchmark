@@ -20,7 +20,14 @@ def main() -> None:
     args = parser.parse_args()
 
     release_dir = fetch_mica_release(args.output_dir)
+    datasets_dir = release_dir / "datasets"
+    if not datasets_dir.exists():
+        raise RuntimeError(
+            f"Expected dataset directory at {datasets_dir}, but it was not found."
+        )
+
     print(f"ready: {release_dir}")
+    print(f"datasets: {datasets_dir}")
 
 
 if __name__ == "__main__":
