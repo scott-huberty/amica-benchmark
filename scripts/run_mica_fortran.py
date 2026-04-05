@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,29 @@ from mica_common import load_eeglab_set
 
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = Path.home() / "amica_test_data" / "mica_release" / "datasets"
+
+
+def _run_and_tee(cmd: list[str], log_path: Path) -> None:
+    """Run a command, streaming combined stdout/stderr to both console and file."""
+    with log_path.open("w", encoding="utf-8") as log_file:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert process.stdout is not None
+        try:
+            for line in process.stdout:
+                sys.stdout.write(line)
+                log_file.write(line)
+            return_code = process.wait()
+        finally:
+            process.stdout.close()
+
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, cmd)
 
 
 def run_fortran(
@@ -94,7 +118,8 @@ def run_fortran(
             image_ref,
             f"/params/{param_path.name}",
         ]
-    subprocess.run(cmd, check=True)
+    log_path = run_dir / "fortran_console.txt"
+    _run_and_tee(cmd, log_path)
 
     manifest = {
         "dataset_set": str(dataset_set),
@@ -112,6 +137,7 @@ def run_fortran(
         "container_runtime": container_runtime,
         "apptainer_image": apptainer_image,
         "fortran_threads": int(fortran_threads),
+        "fortran_console_log": str(log_path),
     }
     manifest_path = run_dir / "fortran_run.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
