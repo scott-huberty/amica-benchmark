@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""Download open EEG benchmark data and reference parameter files."""
+"""Download the optional EEGLAB MICA benchmark dataset."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from urllib.request import urlretrieve
 
-FILES = {
-    "eeglab_data.fdt": "https://github.com/sccn/eeglab/raw/develop/sample_data/eeglab_data.fdt",
-    "eeglab_data.set": "https://github.com/sccn/eeglab/raw/develop/sample_data/eeglab_data.set",
-    "amicadefs_test.param": "https://raw.githubusercontent.com/scott-huberty/amica/amica-python/tests/eeglab_sample_data/amicadefs_test.param",
-}
+from amica.utils import fetch_mica_release
 
 
 def main() -> None:
@@ -19,22 +14,13 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path.home() / "amica_test_data" / "eeglab_sample_data",
-        help="Directory where benchmark dataset and param files are stored.",
+        default=Path.home() / "amica_test_data",
+        help="Directory where the extracted mica_release benchmark data should live.",
     )
     args = parser.parse_args()
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    for fname, url in FILES.items():
-        dst = args.output_dir / fname
-        if dst.exists() and dst.stat().st_size > 0:
-            print(f"exists: {dst}")
-            continue
-        print(f"downloading: {url}\n  -> {dst}")
-        urlretrieve(url, dst)
-
-    print(f"ready: {args.output_dir}")
+    release_dir = fetch_mica_release(args.output_dir)
+    print(f"ready: {release_dir}")
 
 
 if __name__ == "__main__":
