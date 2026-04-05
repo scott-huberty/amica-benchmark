@@ -1,0 +1,12 @@
+name: amica-benchmark
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10
+  - numpy>=2
+  - mne-base
+  - pooch>=1.8.2
+  - pytorch
+  - pip
+  - pip:
+      - amica-python @ git+https://github.com/scott-huberty/amica-python.git
