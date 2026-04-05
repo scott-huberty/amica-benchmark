@@ -154,6 +154,16 @@ python scripts/submit_mica_fortran_slurm.py \
   --container-runtime apptainer \
   --apptainer-image /path/to/containers/amica.sif
 ```
+ or for python
+
+ ```bash
+ python scripts/submit_mica_python_slurm.py \
+  --datasets-dir ~/amica_test_data/mica_release/datasets \
+  --dataset-glob 'cz84.set' \
+  --fortran-search-root ./benchmark_runs \
+  --threads 4 \
+  --max-iter 2000
+```
 
 Submit Python jobs:
 
