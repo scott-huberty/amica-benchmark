@@ -74,6 +74,8 @@ For cluster / Apptainer workflows:
 RUNTIME=apptainer ./scripts/pull_fortran_image.sh shuberty/amica:latest /path/to/save/your/containers/amica.sif
 ```
 
+Note that depending on your HPC you may have to load apptainer via `LMOD` before running the above command, e.g. `module load apptainer`
+
 ## Single-dataset runners
 
 ```bash
@@ -139,6 +141,18 @@ For Apptainer-backed SLURM submission:
 
 ```bash
 make slurm-fortran THREADS=4 MAX_ITER=2000 CONTAINER_RUNTIME=apptainer APPTAINER_IMAGE=/path/to/containers/amica.sif
+```
+
+To one just a single subject:
+
+```bash
+python scripts/submit_mica_fortran_slurm.py \
+  --datasets-dir ~/amica_test_data/mica_release/datasets \
+  --dataset-glob 'cz84.set' \
+  --threads 4 \
+  --max-iter 2000 \
+  --container-runtime apptainer \
+  --apptainer-image /path/to/containers/amica.sif
 ```
 
 Submit Python jobs:
