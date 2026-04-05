@@ -9,6 +9,7 @@ from pathlib import Path
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = Path.home() / "amica_test_data" / "mica_release" / "datasets"
 DEFAULT_SBATCH = Path(__file__).resolve().parents[1] / "slurm" / "mica_fortran_dataset.sbatch"
+DEFAULT_BENCH_REPO = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
@@ -30,6 +31,7 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--time", default="12:00:00")
     parser.add_argument("--mem", default="16G")
+    parser.add_argument("--bench-repo", type=Path, default=DEFAULT_BENCH_REPO)
     parser.add_argument("--sbatch-script", type=Path, default=DEFAULT_SBATCH)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -59,6 +61,7 @@ def main() -> None:
             str(int(args.n_mixtures)),
             str(args.container_runtime),
             "" if args.apptainer_image is None else str(args.apptainer_image),
+            str(args.bench_repo.expanduser().resolve()),
         ]
         if args.n_components is not None:
             cmd.append(str(int(args.n_components)))

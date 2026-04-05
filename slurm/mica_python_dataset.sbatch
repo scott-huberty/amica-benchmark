@@ -6,8 +6,8 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 10 ]; then
-  echo "Usage: $0 DATASET_SET RUN_DIR MAX_ITER THREADS FORTRAN_SEARCH_ROOT N_MIXTURES RANDOM_STATE DEVICE VERBOSE BENCH_ROOT [N_COMPONENTS]"
+if [ "$#" -lt 11 ]; then
+  echo "Usage: $0 DATASET_SET RUN_DIR MAX_ITER THREADS FORTRAN_SEARCH_ROOT N_MIXTURES RANDOM_STATE DEVICE VERBOSE BENCH_ROOT BENCH_REPO [N_COMPONENTS]"
   exit 1
 fi
 
@@ -23,11 +23,11 @@ VERBOSE="$9"
 shift 9
 BENCH_ROOT="$1"
 shift 1
+BENCH_REPO="$1"
+shift 1
 N_COMPONENTS="${1:-}"
 
-PYTHON_BIN="${PYTHON_BIN:-/Users/scotterik/miniforge3/envs/amica_env/bin/python}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BENCH_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-$THREADS}"
 export OPM_NUM_THREADS="${SLURM_CPUS_PER_TASK:-$THREADS}"
