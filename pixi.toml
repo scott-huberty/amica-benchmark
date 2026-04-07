@@ -8,9 +8,13 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 [dependencies]
 python = ">=3.10"
 numpy = ">=2"
+scipy = "*"
+pandas = "*"
+matplotlib-base = "*"
 mne-base = "*"
 pooch = ">=1.8.2"
 pytorch = "*"
+tabulate = "*"
 
 [pypi-dependencies]
 amica-benchmark = { path = ".", editable = true }
