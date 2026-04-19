@@ -9,7 +9,7 @@ description = "Benchmark AMICA-Python vs Fortran AMICA"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "amica-python @ git+file:///Users/scotterik/devel/projects/amica-python/amica-python",
+    "amica-python @ git+https://github.com/scott-huberty/amica-python.git",
     "matplotlib",
     "mne",
     "numpy>=2",

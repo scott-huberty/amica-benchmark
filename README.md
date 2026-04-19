@@ -51,8 +51,8 @@ uv run python scripts/submit_mica_python_slurm.py
 Pass script options directly when needed:
 
 ```bash
-pixi run benchmark-python-all -- --datasets-dir ~/amica_test_data/mica_release/datasets --fortran-search-root ./benchmark_runs --python-threads 4 --max-iter 2000
-uv run python scripts/run_mica_python_all.py --datasets-dir ~/amica_test_data/mica_release/datasets --fortran-search-root ./benchmark_runs --python-threads 4 --max-iter 2000
+pixi run benchmark-python-all -- --datasets-dir ~/amica_test_data/mica_release/datasets --fortran-search-root ./benchmark_runs --python-threads 4 --max-iter 1000
+uv run python scripts/run_mica_python_all.py --datasets-dir ~/amica_test_data/mica_release/datasets --fortran-search-root ./benchmark_runs --python-threads 4 --max-iter 1000
 ```
 
 For single-subject runs, call the scripts directly:
@@ -129,12 +129,12 @@ Each submitted job requests:
 - `--cpus-per-task=4`
 - `--mem=16G`
 - `--time=12:00:00`
-- `--max-iter=2000`
+- `--max-iter=1000`
 
 Submit Fortran jobs:
 
 ```bash
-make slurm-fortran THREADS=4 MAX_ITER=2000
+make slurm-fortran THREADS=4 MAX_ITER=1000
 ```
 
 For Apptainer-backed SLURM submission:
@@ -150,7 +150,7 @@ python scripts/submit_mica_fortran_slurm.py \
   --datasets-dir ~/amica_test_data/mica_release/datasets \
   --dataset-glob 'cz84.set' \
   --threads 4 \
-  --max-iter 2000 \
+  --max-iter 1000 \
   --container-runtime apptainer \
   --apptainer-image /path/to/containers/amica.sif
 ```
@@ -162,18 +162,18 @@ python scripts/submit_mica_fortran_slurm.py \
   --dataset-glob 'cz84.set' \
   --fortran-search-root ./benchmark_runs \
   --threads 4 \
-  --max-iter 2000
+  --max-iter 1000
 ```
 
 Submit Python jobs:
 
 ```bash
-make slurm-python THREADS=4 MAX_ITER=2000
+make slurm-python THREADS=4 MAX_ITER=1000
 ```
 
 Or invoke submitters directly:
 
 ```bash
-python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 2000
-python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 2000
+python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 1000
+python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000
 ```
