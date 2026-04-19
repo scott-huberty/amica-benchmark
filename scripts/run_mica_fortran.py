@@ -5,6 +5,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -119,7 +120,11 @@ def run_fortran(
             f"/params/{param_path.name}",
         ]
     log_path = run_dir / "fortran_console.txt"
+    fit_started_at_epoch_seconds = time.time()
+    fit_started_at_perf_counter = time.perf_counter()
     _run_and_tee(cmd, log_path)
+    fit_finished_at_epoch_seconds = time.time()
+    fit_seconds = time.perf_counter() - fit_started_at_perf_counter
 
     manifest = {
         "dataset_set": str(dataset_set),
@@ -137,6 +142,9 @@ def run_fortran(
         "container_runtime": container_runtime,
         "apptainer_image": apptainer_image,
         "fortran_threads": int(fortran_threads),
+        "fit_started_at_epoch_seconds": float(fit_started_at_epoch_seconds),
+        "fit_finished_at_epoch_seconds": float(fit_finished_at_epoch_seconds),
+        "fit_seconds": float(fit_seconds),
         "fortran_console_log": str(log_path),
     }
     manifest_path = run_dir / "fortran_run.json"

@@ -82,7 +82,7 @@ Note that depending on your HPC you may have to load apptainer via `LMOD` before
 python scripts/run_mica_fortran.py \
   --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
   --container-runtime docker \
-  --max-iter 2000 \
+  --max-iter 1000 \
   --fortran-threads 4
 ```
 
@@ -93,7 +93,7 @@ python scripts/run_mica_fortran.py \
   --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
   --container-runtime apptainer \
   --apptainer-image /shared/containers/amica.sif \
-  --max-iter 2000 \
+  --max-iter 1000 \
   --fortran-threads 4
 ```
 
@@ -101,7 +101,7 @@ python scripts/run_mica_fortran.py \
 python scripts/run_mica_python.py \
   --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
   --fortran-search-root ./benchmark_runs \
-  --max-iter 2000 \
+  --max-iter 1000 \
   --python-threads 4
 ```
 
@@ -112,8 +112,8 @@ If `--fortran-out` is omitted, `run_mica_python.py` searches `--fortran-search-r
 If you have a virtual environment activated, you can use the makefile:
 
 ```bash
-make fortran-all THREADS=4 MAX_ITER=2000
-make python-all THREADS=4 MAX_ITER=2000
+make fortran-all THREADS=4 MAX_ITER=1000
+make python-all THREADS=4 MAX_ITER=1000
 ```
 
 You can also specify a specific python or python binary:

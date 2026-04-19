@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 from pathlib import Path
 
 import joblib
@@ -77,7 +78,11 @@ def run_python(
         sbeta_init=sbeta_init,
         mu_init=mu_init,
     )
+    fit_started_at_epoch_seconds = time.time()
+    fit_started_at_perf_counter = time.perf_counter()
     model.fit(data)
+    fit_finished_at_epoch_seconds = time.time()
+    fit_seconds = time.perf_counter() - fit_started_at_perf_counter
 
     model_path = run_dir / "python_model.joblib"
     joblib.dump(model, model_path)
@@ -117,6 +122,9 @@ def run_python(
         "random_state": int(random_state),
         "device": device,
         "python_threads": int(python_threads),
+        "fit_started_at_epoch_seconds": float(fit_started_at_epoch_seconds),
+        "fit_finished_at_epoch_seconds": float(fit_finished_at_epoch_seconds),
+        "fit_seconds": float(fit_seconds),
         "python_results_npz": str(out_npz),
         "python_model_joblib": str(model_path),
         "fortran_ll_final": float(ll_f_nz[-1]) if ll_f_nz.size else float("nan"),
