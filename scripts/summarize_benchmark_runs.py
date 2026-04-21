@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -37,16 +36,6 @@ from mica_common import load_eeglab_set
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = REAL_HOME / "amica_test_data" / "mica_release" / "datasets"
 
-ITER_RE = re.compile(
-    r"iter\s+(?P<iter>\d+)\s+"
-    r"lrate =\s+(?P<lrate>[-+0-9.Ee]+)\s+"
-    r"LL =\s+(?P<ll>[-+0-9.Ee]+)\s+"
-    r"nd =\s+(?P<nd>[-+0-9.Ee]+).*?"
-    r"\(\s*(?P<seconds>[-+0-9.Ee]+)\s*s,"
-)
-FORTRAN_TOTAL_HOURS_RE = re.compile(r"Execution time:\s*(?P<hours>[-+0-9.Ee]+)\s*h")
-PYTHON_TOTAL_SECONDS_RE = re.compile(r"Finished in\s+(?P<seconds>[-+0-9.Ee]+)\s+seconds")
-
 
 @dataclass
 class CurveMetrics:
@@ -56,11 +45,6 @@ class CurveMetrics:
     ll_peak: float
     ll_gain_to_final: float
     ll_gain_to_peak: float
-    iter_peak: int
-    final_minus_peak: float
-    iter_to_90pct_peak_gain: int | None
-    iter_to_95pct_peak_gain: int | None
-    diverged_after_peak: bool
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -74,83 +58,18 @@ def _clean_ll(values: np.ndarray) -> np.ndarray:
     return arr
 
 
-def _iter_to_fraction(arr: np.ndarray, fraction: float) -> int | None:
-    if arr.size == 0:
-        return None
-    start = float(arr[0])
-    peak = float(np.max(arr))
-    gain = peak - start
-    if gain <= 0:
-        return 1
-    target = start + fraction * gain
-    idx = np.flatnonzero(arr >= target)
-    if idx.size == 0:
-        return None
-    return int(idx[0] + 1)
-
-
 def _curve_metrics(values: np.ndarray) -> CurveMetrics:
     arr = _clean_ll(values)
     if arr.size == 0:
         raise ValueError("LL curve is empty after removing zeros/non-finite values.")
-    peak_idx = int(np.argmax(arr))
     return CurveMetrics(
         n_iter=int(arr.size),
         ll_initial=float(arr[0]),
         ll_final=float(arr[-1]),
-        ll_peak=float(arr[peak_idx]),
+        ll_peak=float(np.max(arr)),
         ll_gain_to_final=float(arr[-1] - arr[0]),
-        ll_gain_to_peak=float(arr[peak_idx] - arr[0]),
-        iter_peak=int(peak_idx + 1),
-        final_minus_peak=float(arr[-1] - arr[peak_idx]),
-        iter_to_90pct_peak_gain=_iter_to_fraction(arr, 0.90),
-        iter_to_95pct_peak_gain=_iter_to_fraction(arr, 0.95),
-        diverged_after_peak=bool((arr[-1] - arr[peak_idx]) < -1e-3),
+        ll_gain_to_peak=float(np.max(arr) - arr[0]),
     )
-
-
-def _parse_fortran_out(path: Path) -> pd.DataFrame:
-    rows: list[dict[str, float]] = []
-    for line in path.read_text().splitlines():
-        match = ITER_RE.search(line)
-        if not match:
-            continue
-        rows.append(
-            {
-                "iter": int(match.group("iter")),
-                "lrate": float(match.group("lrate")),
-                "ll": float(match.group("ll")),
-                "nd": float(match.group("nd")),
-                "seconds": float(match.group("seconds")),
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-def _parse_fortran_total_hours(path: Path) -> float | None:
-    for line in reversed(path.read_text().splitlines()):
-        match = FORTRAN_TOTAL_HOURS_RE.search(line)
-        if match:
-            return float(match.group("hours"))
-    return None
-
-
-def _find_slurm_log(slurm_dir: Path, prefix: str, dataset_name: str) -> Path | None:
-    matches = sorted(slurm_dir.glob(f"slurm-{prefix}_{dataset_name}-*.out"))
-    if not matches:
-        return None
-    return matches[-1]
-
-
-def _parse_python_total_seconds(path: Path | None) -> float | None:
-    if path is None or not path.exists():
-        return None
-    for line in reversed(path.read_text().splitlines()):
-        clean = re.sub(r"\x1b\[[0-9;]*m", "", line)
-        match = PYTHON_TOTAL_SECONDS_RE.search(clean)
-        if match:
-            return float(match.group("seconds"))
-    return None
 
 
 def _corr_match_report(s_fortran: np.ndarray, s_python: np.ndarray) -> dict[str, float]:
@@ -207,8 +126,6 @@ def _summarize_pair(
 
     python_npz = np.load(python_dir / "python_results.npz")
     python_ll = _clean_ll(python_npz["ll"])
-    python_slurm_log = _find_slurm_log(python_dir.parent / "SLURM", "micaP", dataset_name)
-    python_total_seconds = _parse_python_total_seconds(python_slurm_log)
     fortran_results = load_fortran_results(
         fortran_dir / "fortran_out",
         n_components=int(python_manifest["n_components"]),
@@ -216,16 +133,14 @@ def _summarize_pair(
         n_features=int(python_manifest["data_shape_samples_features"][1]),
     )
     fortran_ll = _clean_ll(fortran_results["LL"])
-    fortran_iter_df = _parse_fortran_out(fortran_dir / "fortran_out" / "out.txt")
-    fortran_total_hours = _parse_fortran_total_hours(fortran_dir / "fortran_out" / "out.txt")
-    fortran_total_seconds = None if fortran_total_hours is None else 3600.0 * fortran_total_hours
+    fortran_fit_seconds = float(fortran_manifest["fit_seconds"])
+    python_fit_seconds = float(python_manifest["fit_seconds"])
 
     py_curve = _curve_metrics(python_ll)
     ft_curve = _curve_metrics(fortran_ll)
 
     shared_n = int(min(fortran_ll.size, python_ll.size))
     ll_delta = float(py_curve.ll_final - ft_curve.ll_final)
-    shared_delta = python_ll[:shared_n] - fortran_ll[:shared_n]
 
     record: dict[str, object] = {
         "dataset": dataset_name,
@@ -240,35 +155,13 @@ def _summarize_pair(
         "fortran_n_iter": ft_curve.n_iter,
         "python_n_iter": py_curve.n_iter,
         "python_iter_fraction_of_fortran": py_curve.n_iter / ft_curve.n_iter,
-        "fortran_iter_peak": ft_curve.iter_peak,
-        "python_iter_peak": py_curve.iter_peak,
-        "fortran_final_minus_peak": ft_curve.final_minus_peak,
-        "python_final_minus_peak": py_curve.final_minus_peak,
-        "fortran_diverged_after_peak": ft_curve.diverged_after_peak,
-        "python_diverged_after_peak": py_curve.diverged_after_peak,
-        "fortran_iter_to_90pct_peak_gain": ft_curve.iter_to_90pct_peak_gain,
-        "python_iter_to_90pct_peak_gain": py_curve.iter_to_90pct_peak_gain,
-        "fortran_iter_to_95pct_peak_gain": ft_curve.iter_to_95pct_peak_gain,
-        "python_iter_to_95pct_peak_gain": py_curve.iter_to_95pct_peak_gain,
         "shared_n_iter": shared_n,
-        "shared_ll_mae": float(np.mean(np.abs(shared_delta))),
-        "shared_ll_rmse": float(np.sqrt(np.mean(shared_delta**2))),
-        "shared_ll_max_abs_delta": float(np.max(np.abs(shared_delta))),
-        "fortran_mean_seconds_per_iter": (
-            float(fortran_iter_df["seconds"].mean()) if not fortran_iter_df.empty else None
-        ),
-        "fortran_total_hours_approx": fortran_total_hours,
-        "fortran_total_seconds_approx": fortran_total_seconds,
-        "python_total_seconds": python_total_seconds,
-        "python_vs_fortran_time_ratio": (
-            None
-            if python_total_seconds is None or fortran_total_seconds is None or fortran_total_seconds <= 0
-            else float(python_total_seconds / fortran_total_seconds)
-        ),
+        "fortran_fit_seconds": fortran_fit_seconds,
+        "python_fit_seconds": python_fit_seconds,
         "fortran_vs_python_speedup": (
-            None
-            if python_total_seconds is None or fortran_total_seconds is None or python_total_seconds <= 0
-            else float(fortran_total_seconds / python_total_seconds)
+            float(fortran_fit_seconds / python_fit_seconds)
+            if python_fit_seconds > 0
+            else None
         ),
     }
 
@@ -286,7 +179,6 @@ def _summarize_pair(
 
     record["fortran_manifest"] = str(fortran_manifest["fortran_output_dir"])
     record["python_manifest"] = str(python_manifest["python_results_npz"])
-    record["python_slurm_log"] = None if python_slurm_log is None else str(python_slurm_log)
     return record
 
 
@@ -331,17 +223,17 @@ def _plot_ll_delta(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
-    plot_df = df.dropna(subset=["python_total_seconds", "fortran_total_seconds_approx"]).copy()
+    plot_df = df.dropna(subset=["python_fit_seconds", "fortran_fit_seconds"]).copy()
     plot_df = plot_df.loc[plot_df["dataset"] != "gv84"].sort_values("fortran_vs_python_speedup")
     fig, ax = plt.subplots(figsize=(10, 5))
     x = np.arange(len(plot_df))
     width = 0.42
-    ax.bar(x - width / 2, plot_df["fortran_total_seconds_approx"], width=width, label="Fortran (~sec)", color="#1f77b4")
-    ax.bar(x + width / 2, plot_df["python_total_seconds"], width=width, label="Python (sec)", color="#ff7f0e")
+    ax.bar(x - width / 2, plot_df["fortran_fit_seconds"], width=width, label="Fortran (sec)", color="#1f77b4")
+    ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#ff7f0e")
     ax.set_xticks(x)
     ax.set_xticklabels(plot_df["dataset"], rotation=45)
-    ax.set_ylabel("Approx wall time (seconds)")
-    ax.set_title("Approximate Runtime Comparison (gv84 excluded)")
+    ax.set_ylabel("Wall time (seconds)")
+    ax.set_title("Runtime Comparison (gv84 excluded)")
     ax.legend(frameon=False)
     ax.grid(True, axis="y", alpha=0.25)
     fig.tight_layout()
@@ -392,8 +284,8 @@ def _make_markdown(df: pd.DataFrame, aggregate: dict[str, object]) -> str:
     ]
     if "matched_source_abs_corr_mean" in df.columns:
         display_cols.append("matched_source_abs_corr_mean")
-    if "fortran_total_seconds_approx" in df.columns and "python_total_seconds" in df.columns:
-        display_cols.extend(["fortran_total_seconds_approx", "python_total_seconds", "fortran_vs_python_speedup"])
+    if "fortran_fit_seconds" in df.columns and "python_fit_seconds" in df.columns:
+        display_cols.extend(["fortran_fit_seconds", "python_fit_seconds", "fortran_vs_python_speedup"])
 
     table = (
         df.sort_values("abs_python_minus_fortran_ll", ascending=False)[display_cols]
@@ -414,7 +306,7 @@ def _make_markdown(df: pd.DataFrame, aggregate: dict[str, object]) -> str:
         )
     if "median_fortran_vs_python_speedup" in aggregate:
         lines.append(
-            f"- Median approximate Fortran/Python speed ratio: {aggregate['median_fortran_vs_python_speedup']:.3f}x"
+            f"- Median Fortran/Python speed ratio: {aggregate['median_fortran_vs_python_speedup']:.3f}x"
         )
     lines.extend(["", table, ""])
     return "\n".join(lines)
@@ -479,21 +371,14 @@ def main() -> None:
         ),
         "max_abs_final_ll_delta": float(df["abs_python_minus_fortran_ll"].max()),
         "worst_case_dataset": str(worst_row["dataset"]),
-        "datasets_with_post_peak_divergence": sorted(
-            df.loc[
-                df["fortran_diverged_after_peak"] | df["python_diverged_after_peak"],
-                "dataset",
-            ].tolist()
-        ),
         "median_python_iter_fraction_of_fortran": float(df["python_iter_fraction_of_fortran"].median()),
     }
     if "matched_source_abs_corr_mean" in df.columns:
         aggregate["mean_matched_source_abs_corr"] = float(df["matched_source_abs_corr_mean"].mean())
-        aggregate["min_matched_source_abs_corr"] = float(df["matched_source_abs_corr_min"].min())
-    timing_df = df.dropna(subset=["python_total_seconds", "fortran_total_seconds_approx"])
+    timing_df = df.dropna(subset=["python_fit_seconds", "fortran_fit_seconds"])
     if not timing_df.empty:
-        aggregate["median_python_total_seconds"] = float(timing_df["python_total_seconds"].median())
-        aggregate["median_fortran_total_seconds_approx"] = float(timing_df["fortran_total_seconds_approx"].median())
+        aggregate["median_python_fit_seconds"] = float(timing_df["python_fit_seconds"].median())
+        aggregate["median_fortran_fit_seconds"] = float(timing_df["fortran_fit_seconds"].median())
         aggregate["median_fortran_vs_python_speedup"] = float(timing_df["fortran_vs_python_speedup"].median())
         aggregate["mean_fortran_vs_python_speedup"] = float(timing_df["fortran_vs_python_speedup"].mean())
 
