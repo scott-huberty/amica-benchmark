@@ -11,3 +11,6 @@ wheels/
 
 # Benchmark output artifacts
 benchmark_runs/
+
+# MATLAB files used for the container
+matlab/
