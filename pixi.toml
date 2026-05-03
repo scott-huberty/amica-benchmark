@@ -15,6 +15,7 @@ mne-base = "*"
 pooch = ">=1.8.2"
 pytorch = "*"
 tabulate = "*"
+scikit-learn = "*"
 
 [pypi-dependencies]
 amica-benchmark = { path = ".", editable = true }
@@ -24,5 +25,6 @@ amica-python = { git = "https://github.com/scott-huberty/amica-python.git" }
 download-dataset = { cmd = "python scripts/download_dataset.py" }
 benchmark-fortran-all = { cmd = "python scripts/run_mica_fortran_all.py" }
 benchmark-python-all = { cmd = "python scripts/run_mica_python_all.py" }
+benchmark-fastica-picard-all = { cmd = "python scripts/run_mica_fastica_picard_all.py" }
 benchmark-slurm-fortran = { cmd = "python scripts/submit_mica_fortran_slurm.py" }
 benchmark-slurm-python = { cmd = "python scripts/submit_mica_python_slurm.py" }

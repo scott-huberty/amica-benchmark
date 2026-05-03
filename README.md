@@ -42,6 +42,11 @@ uv run python scripts/run_mica_python_all.py
 ```
 
 ```bash
+pixi run benchmark-fastica-picard-all
+uv run python scripts/run_mica_fastica_picard_all.py
+```
+
+```bash
 pixi run benchmark-slurm-fortran
 pixi run benchmark-slurm-python
 uv run python scripts/submit_mica_fortran_slurm.py
@@ -60,6 +65,7 @@ For single-subject runs, call the scripts directly:
 ```bash
 python scripts/run_mica_fortran.py --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set
 python scripts/run_mica_python.py --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set
+python scripts/run_mica_fastica_picard.py --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set
 ```
 
 ## Fortran image
@@ -75,6 +81,101 @@ RUNTIME=apptainer ./scripts/pull_fortran_image.sh shuberty/amica:latest /path/to
 ```
 
 Note that depending on your HPC you may have to load apptainer via `LMOD` before running the above command, e.g. `module load apptainer`
+
+
+## Recompute Delorme MIR with AMICA-Python
+
+The reproducible MATLAB workflow prepares a working copy of the MICA release,
+patches that copy to add `AMICA-Python` as algorithm 48, exports saved
+AMICA-Python joblib fits into `icadecompositions/*.mat`, runs Delorme's
+original `mutualinfoalgo.m`, and summarizes MIR while excluding MATLAB dataset
+10 (`gv84`) from every algorithm.
+
+EEGLAB 11.0.3.1b is expected at `./matlab/eeglab11_0_3_1b`. If it is missing:
+
+```bash
+make download-eeglab11
+```
+
+Prepare the MICA working copy and AMICA-Python decomposition files:
+
+```bash
+make prepare-mica-amica-python \
+  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
+  MICA_RELEASE_DIR=/Users/scotterik/amica_test_data/mica_release \
+  PYTHON_RUN_ROOT=./benchmark_runs/mica_release_python_slurm_20260419_174859
+```
+
+
+This copies the mica release directoryto `benchmark_runs/mica_release_amica_python_matlab`,
+and patches to `mutualinfoalgo` to incluce a mat file of AMICA-Python results.
+
+Run the MATLAB MIR script:
+
+```bash
+make matlab-mutualinfo-local \
+  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab
+```
+
+Summarize the result excluding `gv84`:
+
+```bash
+make summarize-mir-no-gv84 \
+  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python
+```
+
+Outputs:
+
+```text
+results/mir_summary_excluding_gv84.csv
+results/mir_summary_excluding_gv84.md
+```
+
+To smoke-test the original MATLAB/DIPFIT fitting path on one dataset and
+algorithm:
+
+```bash
+make matlab-dipfit-smoke \
+  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab \
+  MATLAB_DATASET=1 \
+  MATLAB_ALGONUM=43
+```
+
+This runs `DATASET=1; ALGONUM=43; processdat` in the prepared working copy.
+Per `processdat.m`, MATLAB dataset 10 is `gv84`.
+
+To run DIPFIT for AMICA-Python only, excluding `gv84`:
+
+```bash
+make matlab-dipfit-amica-python \
+  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab
+```
+
+This runs `run_amica_python_dipfit.m` in the prepared working copy. It writes
+updated AMICA-Python decomposition files for `ALGONUM=48` and saves a batch
+status file:
+
+```text
+benchmark_runs/mica_release_amica_python_matlab/amica_python_dipfit_batch_results.mat
+```
+
+After both `matlab-mutualinfo-local` and `matlab-dipfit-amica-python` have
+completed in the same prepared working copy, recreate Delorme Figure 4B and add
+AMICA-Python:
+
+```bash
+make figure4b-amica-python \
+  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python
+```
+
+Outputs:
+
+```text
+results/delorme_figure4b_with_amica_python.csv
+results/delorme_figure4b_with_amica_python.md
+results/delorme_figure4b_with_amica_python.png
+results/delorme_figure4b_with_amica_python.pdf
+```
 
 ## Single-dataset runners
 
@@ -107,6 +208,17 @@ python scripts/run_mica_python.py \
 
 If `--fortran-out` is omitted, `run_mica_python.py` searches `--fortran-search-root` for a matching `fortran_out` directory by dataset stem, preferring exact stem folder matches and then newest outputs.
 
+Run the simpler Delorme-style comparison algorithms for one subject:
+
+```bash
+python scripts/run_mica_fastica_picard.py \
+  --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
+  --max-iter 1000 \
+  --python-threads 4
+```
+
+This fits scikit-learn FastICA and Picard extended-infomax (`extended=True`, `ortho=False`), saves both fitted estimators as joblib files, records wall-clock fit time, and writes Delorme `getent2`-style mutual-information reduction into `fastica_picard_run.json`.
+
 ## All-dataset local runs
 
 If you have a virtual environment activated, you can use the makefile:
@@ -114,6 +226,7 @@ If you have a virtual environment activated, you can use the makefile:
 ```bash
 make fortran-all THREADS=4 MAX_ITER=1000
 make python-all THREADS=4 MAX_ITER=1000
+make fastica-picard-all THREADS=4 MAX_ITER=1000
 ```
 
 You can also specify a specific python or python binary:
@@ -176,4 +289,12 @@ Or invoke submitters directly:
 ```bash
 python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 1000
 python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000
+```
+
+Summarize a completed Fortran/Python benchmark pair:
+
+```bash
+/Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
+  --fortran-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_fortran_slurm_20260419_164625 \
+  --python-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_python_slurm_20260419_174859
 ```
