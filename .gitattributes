@@ -1,2 +1,3 @@
 # Treat SVG files as binary so we don't track their line count in the diff.
 *.svg binary
+results/delorme_figure4b_with_amica_python.svg binary
