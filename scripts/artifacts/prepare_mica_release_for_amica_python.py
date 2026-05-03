@@ -11,6 +11,7 @@ from export_amica_python_to_mica_mat import export_amica_python_to_mica_mat
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS_DIR = Path(__file__).resolve().parent
 DEFAULT_MICA_ROOT = Path("/Users/scotterik/amica_test_data/mica_release")
 DEFAULT_PYTHON_RUN_ROOT = (
     REPO_ROOT / "benchmark_runs" / "mica_release_python_slurm_20260419_174859"
@@ -28,7 +29,6 @@ def copy_or_link_mica_release(source: Path, dest: Path, *, force: bool) -> None:
     link_names = {
         "datasets",
         "icadecompositions",
-        "dipfit1.02",
         "randdip",
         "pmi_save.mat",
     }
@@ -93,6 +93,34 @@ def patch_mutualinfoalgo(path: Path) -> None:
     path.write_text(text)
 
 
+def patch_plgndr(path: Path) -> None:
+    path.write_text(
+        """function [y] = plgndr(n,k,x)
+% PLGNDR associated Legendre function.
+%
+% The original DIPFIT 1.02 distribution shipped this as an architecture-
+% specific MEX file. Modern macOS MATLAB cannot load the bundled mexmac
+% binary, so this prepared working copy uses MATLAB's built-in LEGENDRE.
+
+if nargin ~= 3
+    error('invalid number of arguments for PLGNDR');
+end
+if k < 0 || k > n || x > 1.0 || x < -1.0
+    error('Bad arguments in routine plgndr');
+end
+
+p = legendre(n, x);
+y = p(k+1);
+"""
+    )
+
+
+def copy_artifact_matlab_scripts(workdir: Path) -> None:
+    matlab_dir = ARTIFACTS_DIR / "matlab"
+    for script in matlab_dir.glob("*.m"):
+        shutil.copy2(script, workdir / script.name)
+
+
 def validate_eeglab(eeglab_dir: Path) -> None:
     if not (eeglab_dir / "eeglab.m").exists():
         raise FileNotFoundError(
@@ -125,6 +153,8 @@ def main() -> None:
     copy_or_link_mica_release(mica_root, workdir, force=args.force)
     patch_processdat(workdir / "processdat.m")
     patch_mutualinfoalgo(workdir / "mutualinfoalgo.m")
+    patch_plgndr(workdir / "dipfit1.02" / "copyprivate" / "plgndr.m")
+    copy_artifact_matlab_scripts(workdir)
     export_result = export_amica_python_to_mica_mat(
         python_run_root=python_run_root,
         out_dir=workdir / "icadecompositions",

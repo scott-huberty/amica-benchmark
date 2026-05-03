@@ -131,6 +131,52 @@ results/mir_summary_excluding_gv84.csv
 results/mir_summary_excluding_gv84.md
 ```
 
+To smoke-test the original MATLAB/DIPFIT fitting path on one dataset and
+algorithm:
+
+```bash
+make matlab-dipfit-smoke \
+  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab \
+  MATLAB_DATASET=1 \
+  MATLAB_ALGONUM=43
+```
+
+This runs `DATASET=1; ALGONUM=43; processdat` in the prepared working copy.
+Per `processdat.m`, MATLAB dataset 10 is `gv84`.
+
+To run DIPFIT for AMICA-Python only, excluding `gv84`:
+
+```bash
+make matlab-dipfit-amica-python \
+  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab
+```
+
+This runs `run_amica_python_dipfit.m` in the prepared working copy. It writes
+updated AMICA-Python decomposition files for `ALGONUM=48` and saves a batch
+status file:
+
+```text
+benchmark_runs/mica_release_amica_python_matlab/amica_python_dipfit_batch_results.mat
+```
+
+After both `matlab-mutualinfo-local` and `matlab-dipfit-amica-python` have
+completed in the same prepared working copy, recreate Delorme Figure 4B and add
+AMICA-Python:
+
+```bash
+make figure4b-amica-python \
+  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python
+```
+
+Outputs:
+
+```text
+results/delorme_figure4b_with_amica_python.csv
+results/delorme_figure4b_with_amica_python.md
+results/delorme_figure4b_with_amica_python.png
+results/delorme_figure4b_with_amica_python.pdf
+```
+
 ## Single-dataset runners
 
 ```bash

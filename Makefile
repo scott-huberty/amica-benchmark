@@ -15,7 +15,10 @@ EEGLAB_DIR ?= ./matlab/eeglab11_0_3_1b
 MATLAB_BIN ?= /Applications/MATLAB_R2023b.app/bin/matlab
 PYTHON_RUN_ROOT ?= $(BENCH_ROOT)/mica_release_python_slurm_20260419_174859
 
-.PHONY: fortran-all python-all fastica-picard-all slurm-fortran slurm-python matlab-image matlab-mutualinfo download-eeglab11 prepare-mica-amica-python matlab-mutualinfo-local summarize-mir-no-gv84
+MATLAB_DATASET ?= 1
+MATLAB_ALGONUM ?= 43
+
+.PHONY: fortran-all python-all fastica-picard-all slurm-fortran slurm-python matlab-image matlab-mutualinfo download-eeglab11 prepare-mica-amica-python matlab-mutualinfo-local matlab-dipfit-smoke matlab-dipfit-amica-python summarize-mir-no-gv84 figure4b-amica-python
 
 fortran-all:
 	$(PYTHON) scripts/run_mica_fortran_all.py \
@@ -74,7 +77,18 @@ prepare-mica-amica-python:
 matlab-mutualinfo-local:
 	$(MATLAB_BIN) -batch "addpath('$(abspath $(EEGLAB_DIR))'); addpath('$(abspath $(MICA_PREPARED_DIR))'); cd('$(abspath $(MICA_PREPARED_DIR))'); mutualinfoalgo"
 
+matlab-dipfit-smoke:
+	$(MATLAB_BIN) -batch "addpath('$(abspath $(EEGLAB_DIR))'); addpath('$(abspath $(MICA_PREPARED_DIR))'); cd('$(abspath $(MICA_PREPARED_DIR))'); DATASET=$(MATLAB_DATASET); ALGONUM=$(MATLAB_ALGONUM); processdat"
+
+matlab-dipfit-amica-python:
+	$(MATLAB_BIN) -batch "addpath('$(abspath $(EEGLAB_DIR))'); addpath('$(abspath $(MICA_PREPARED_DIR))'); cd('$(abspath $(MICA_PREPARED_DIR))'); run_amica_python_dipfit"
+
 summarize-mir-no-gv84:
 	$(PYTHON) scripts/artifacts/summarize_mir_excluding_gv84.py \
 	  --mir-mat $(MICA_PREPARED_DIR)/mir_new.mat \
 	  --out-prefix results/mir_summary_excluding_gv84
+
+figure4b-amica-python:
+	$(PYTHON) scripts/artifacts/plot_delorme_figure4b_with_amica_python.py \
+	  --workdir $(MICA_PREPARED_DIR) \
+	  --out-prefix results/delorme_figure4b_with_amica_python

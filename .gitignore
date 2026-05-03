@@ -13,4 +13,4 @@ wheels/
 benchmark_runs/
 
 # MATLAB files used for the container
-matlab/
+/matlab/
