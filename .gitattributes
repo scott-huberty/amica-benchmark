@@ -1,0 +1,1 @@
+*.svg binary  # Treat SVG files as binary so we don't track their line count in the diff.
