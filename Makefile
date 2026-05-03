@@ -14,11 +14,12 @@ MICA_PREPARED_DIR ?= $(BENCH_ROOT)/mica_release_amica_python_matlab
 EEGLAB_DIR ?= ./matlab/eeglab11_0_3_1b
 MATLAB_BIN ?= /Applications/MATLAB_R2023b.app/bin/matlab
 PYTHON_RUN_ROOT ?= $(BENCH_ROOT)/mica_release_python_slurm_20260419_174859
+MATLAB_PLOTRESULTS_OUT ?= results/matlab_plotresults_original
 
 MATLAB_DATASET ?= 1
 MATLAB_ALGONUM ?= 43
 
-.PHONY: fortran-all python-all fastica-picard-all slurm-fortran slurm-python matlab-image matlab-mutualinfo download-eeglab11 prepare-mica-amica-python matlab-mutualinfo-local matlab-dipfit-smoke matlab-dipfit-amica-python summarize-mir-no-gv84 figure4b-amica-python
+.PHONY: fortran-all python-all fastica-picard-all slurm-fortran slurm-python matlab-image matlab-mutualinfo download-eeglab11 prepare-mica-amica-python matlab-mutualinfo-local matlab-dipfit-smoke matlab-dipfit-amica-python matlab-plotresults-original summarize-mir-no-gv84 figure4b-amica-python
 
 fortran-all:
 	$(PYTHON) scripts/run_mica_fortran_all.py \
@@ -82,6 +83,9 @@ matlab-dipfit-smoke:
 
 matlab-dipfit-amica-python:
 	$(MATLAB_BIN) -batch "addpath('$(abspath $(EEGLAB_DIR))'); addpath('$(abspath $(MICA_PREPARED_DIR))'); cd('$(abspath $(MICA_PREPARED_DIR))'); run_amica_python_dipfit"
+
+matlab-plotresults-original:
+	$(MATLAB_BIN) -batch "addpath('$(abspath $(EEGLAB_DIR))'); addpath('$(abspath $(MICA_PREPARED_DIR))'); cd('$(abspath $(MICA_PREPARED_DIR))'); set(0,'DefaultFigureVisible','off'); plotresults; figs=findall(0,'Type','figure'); outdir='$(abspath $(MATLAB_PLOTRESULTS_OUT))'; if ~exist(outdir,'dir'), mkdir(outdir); end; for k=1:numel(figs), f=figs(k); figure(f); print(f, fullfile(outdir, sprintf('plotresults_fig_%02d.png', k)), '-dpng', '-r300'); print(f, fullfile(outdir, sprintf('plotresults_fig_%02d.pdf', k)), '-dpdf', '-painters'); end; fprintf('Saved %d figures to %s\n', numel(figs), outdir);"
 
 summarize-mir-no-gv84:
 	$(PYTHON) scripts/artifacts/summarize_mir_excluding_gv84.py \

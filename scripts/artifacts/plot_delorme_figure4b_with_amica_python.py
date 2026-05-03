@@ -62,6 +62,30 @@ class AlgorithmInfo:
     code: str
 
 
+def add_cluster_regions(ax):
+    from matplotlib.patches import Ellipse
+
+    regions = [
+        # center_x, center_y, width, height, color,
+        (41.86, 3.8, 0.12, 3.4, "#71D083"),  # PCA; Grass
+        (42.29, 8.0, 0.62, 13.5, "#E796F3"), # AMUSE through JADE-TD-ish; Plum
+        (42.67, 17.6, 0.32, 6.8, "#FF92AD"), # JADE opt. through FastICA; Crimson
+        (43.08, 27.7, 0.34, 8.2, "#FFCA16"), # Pearson through AMICA; Amber
+    ]
+
+    for x, y, width, height, color in regions:
+        ax.add_patch(
+            Ellipse(
+                (x, y),
+                width=width,
+                height=height,
+                facecolor=color,
+                edgecolor="none",
+                alpha=0.35,
+                zorder=1,
+            )
+        )
+
 def mat_cellstr(values: np.ndarray) -> list[str]:
     return [str(x) for x in np.asarray(values).ravel()]
 
@@ -270,15 +294,23 @@ def plot_rows(
     original_rows = [row for row in rows if row["algorithm"] != AMICA_PYTHON_ALGORITHM]
     amica_python_row = next(row for row in rows if row["algorithm"] == AMICA_PYTHON_ALGORITHM)
 
-    fig, ax = plt.subplots(figsize=(7.2, 5.4))
+    with plt.rc_context({
+        "font.size": 10,
+        "axes.labelsize": 11,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        "legend.fontsize": 9,
+    }):
+        fig, ax = plt.subplots(figsize=(7.2, 5.4), constrained_layout=True)
+
     x_original = np.asarray([row["mean_mir_kbits_s"] for row in original_rows], dtype=float)
     y_original = np.asarray([row["rv_below_5_percent"] for row in original_rows], dtype=float)
-    ax.scatter(x_original, y_original, color="black", s=36, zorder=3)
+    ax.scatter(x_original, y_original, color="#111111", s=36, zorder=3, alpha=0.75)
 
     ax.scatter(
         [amica_python_row["mean_mir_kbits_s"]],
         [amica_python_row["rv_below_5_percent"]],
-        color="#d62728",
+        color="#6E56CF",
         marker="D",
         s=58,
         zorder=4,
@@ -286,9 +318,9 @@ def plot_rows(
     )
 
     for row in rows:
-        dx = 0.015
+        dx = -.25 if row["algorithm"] == AMICA_PYTHON_ALGORITHM else 0.015
         dy = 0.0
-        color = "#d62728" if row["algorithm"] == AMICA_PYTHON_ALGORITHM else "black"
+        color = "#6E56CF" if row["algorithm"] == AMICA_PYTHON_ALGORITHM else "#111111"
         if row["algorithm"] in {"Amica", AMICA_PYTHON_ALGORITHM}:
             dy = 0.4
         ax.text(
@@ -313,14 +345,15 @@ def plot_rows(
     ax.plot(
         x_line,
         y_augmented_line,
-        color="#d62728",
+        color="#6E56CF",
         linestyle=":",
         linewidth=1.5,
         label="With AMICA-Python",
     )
 
+    add_cluster_regions(ax)
     ax.set_xlabel("Mutual information reduction (kbits/s)")
-    ax.set_ylabel("Near-dipolar components, RV < 5% (%)")
+    ax.set_ylabel("Near-dipolar components, r.v. < 5% (%)")
     ax.set_xlim(x_min - pad, x_max + pad)
     y_max = max(row["rv_below_5_percent"] for row in rows)
     ax.set_ylim(0, max(35.0, y_max + 4.0))
@@ -337,8 +370,12 @@ def plot_rows(
     ax.legend(loc="upper left", frameon=False)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    fig.tight_layout()
-    fig.savefig(png_path, dpi=200)
+    ax.grid(True, color="#EDEDED", linewidth=0.8)
+    ax.set_axisbelow(True)
+    
+    svg_path = png_path.with_suffix(".svg")
+    fig.savefig(svg_path)
+    fig.savefig(png_path, dpi=300)
     fig.savefig(pdf_path)
     plt.close(fig)
 
