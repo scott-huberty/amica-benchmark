@@ -46,9 +46,9 @@ def export_amica_python_to_mica_mat(
     algorithm_slug: str = "amica_python",
     excluded: set[str] | None = None,
 ) -> dict[str, list[str]]:
-    excluded = excluded or {"gv84"}
     out_dir.mkdir(parents=True, exist_ok=True)
-
+    if excluded is None:
+        excluded = set()
     written: list[str] = []
     skipped: list[str] = []
     for dataset_num, dataset in DATASET_BY_NUM.items():
@@ -119,8 +119,8 @@ def main() -> None:
     parser.add_argument(
         "--exclude-dataset",
         action="append",
-        default=["gv84"],
-        help="Dataset stem to skip. Repeatable. Defaults to gv84.",
+        default=None,
+        help="Dataset stem to skip. Repeatable. e.g. ['gv84'].",
     )
     args = parser.parse_args()
 

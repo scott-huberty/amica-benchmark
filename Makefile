@@ -19,7 +19,7 @@ MATLAB_PLOTRESULTS_OUT ?= results/matlab_plotresults_original
 MATLAB_DATASET ?= 1
 MATLAB_ALGONUM ?= 43
 
-.PHONY: fortran-all python-all fastica-picard-all slurm-fortran slurm-python matlab-image matlab-mutualinfo download-eeglab11 prepare-mica-amica-python matlab-mutualinfo-local matlab-dipfit-smoke matlab-dipfit-amica-python matlab-plotresults-original summarize-mir-no-gv84 figure4b-amica-python
+.PHONY: fortran-all python-all fastica-picard-all slurm-fortran slurm-python matlab-image matlab-mutualinfo download-eeglab11 prepare-mica-amica-python matlab-dipfit-smoke matlab-dipfit-amica-python matlab-plotresults-original summarize-mir-no-gv84 figure4b-amica-python
 
 fortran-all:
 	$(PYTHON) scripts/run_mica_fortran_all.py \
@@ -64,6 +64,8 @@ slurm-python:
 	  --threads $(THREADS) \
 	  --max-iter $(MAX_ITER)
 
+# TODO: make command for summarize_benchmark_runs?
+
 download-eeglab11:
 	$(PYTHON) scripts/artifacts/download_eeglab11.py --dest $(EEGLAB_DIR)
 
@@ -75,7 +77,7 @@ prepare-mica-amica-python:
 	  --eeglab-dir $(EEGLAB_DIR) \
 	  --force
 
-matlab-mutualinfo-local:
+matlab-mutualinfo:
 	$(MATLAB_BIN) -batch "addpath('$(abspath $(EEGLAB_DIR))'); addpath('$(abspath $(MICA_PREPARED_DIR))'); cd('$(abspath $(MICA_PREPARED_DIR))'); mutualinfoalgo"
 
 matlab-dipfit-smoke:

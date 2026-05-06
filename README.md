@@ -113,7 +113,7 @@ and patches to `mutualinfoalgo` to incluce a mat file of AMICA-Python results.
 Run the MATLAB MIR script:
 
 ```bash
-make matlab-mutualinfo-local \
+make matlab-mutualinfo \
   MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab
 ```
 
@@ -159,7 +159,7 @@ status file:
 benchmark_runs/mica_release_amica_python_matlab/amica_python_dipfit_batch_results.mat
 ```
 
-After both `matlab-mutualinfo-local` and `matlab-dipfit-amica-python` have
+After both `matlab-mutualinfo` and `matlab-dipfit-amica-python` have
 completed in the same prepared working copy, recreate Delorme Figure 4B and add
 AMICA-Python:
 

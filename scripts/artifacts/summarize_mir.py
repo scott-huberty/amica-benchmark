@@ -48,7 +48,7 @@ def main() -> None:
         type=Path,
         default=Path(
             "/Users/scotterik/devel/projects/amica-python/amica-benchmark/"
-            "results/mir_summary_excluding_gv84"
+            "results/mir_summary"
         ),
     )
     parser.add_argument("--exclude-dataset-num", type=int, default=10)
@@ -83,7 +83,7 @@ def main() -> None:
         writer.writerows(rows)
 
     lines = [
-        "# MIR Summary Excluding gv84",
+        "# MIR Summary",
         "",
         f"Source: `{args.mir_mat.expanduser().resolve()}`",
         "",

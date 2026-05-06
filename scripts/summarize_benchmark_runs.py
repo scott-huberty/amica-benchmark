@@ -183,8 +183,8 @@ def _summarize_pair(
 
 
 def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(7, 6))
-    ax.scatter(df["fortran_final_ll"], df["python_final_ll"], s=50, color="#1f77b4")
+    fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
+    ax.scatter(df["fortran_final_ll"], df["python_final_ll"], s=50, color="#5472E4")
     for row in df.itertuples(index=False):
         ax.annotate(row.dataset, (row.fortran_final_ll, row.python_final_ll), xytext=(4, 4), textcoords="offset points")
     finite = np.r_[df["fortran_final_ll"].to_numpy(), df["python_final_ll"].to_numpy()]
@@ -198,46 +198,49 @@ def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
     ax.set_ylabel("Python final LL")
     ax.set_title("Final Log-Likelihood Parity")
     ax.grid(True, alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=180)
+    fig.savefig(out_path, dpi=300)
+    fig.savefig(out_path.with_suffix(".pdf"))
+    fig.savefig(out_path.with_suffix(".svg"))
     plt.close(fig)
 
 
 def _plot_ll_delta(df: pd.DataFrame, out_path: Path) -> None:
-    plot_df = df.loc[df["dataset"] != "gv84"].sort_values("python_minus_fortran_ll")
+    plot_df = df.sort_values("python_minus_fortran_ll")
     colors = np.where(
         plot_df["abs_python_minus_fortran_ll"] > 1e-2,
         "#d62728",
         "#2ca02c",
     )
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     ax.bar(plot_df["dataset"], plot_df["python_minus_fortran_ll"], color=colors)
     ax.axhline(0.0, color="0.3", linewidth=1)
     ax.set_ylabel("Python - Fortran final LL")
     ax.set_title("Per-Dataset Final LL Difference")
     ax.tick_params(axis="x", rotation=45)
     ax.grid(True, axis="y", alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=180)
+    fig.savefig(out_path, dpi=300)
+    fig.savefig(out_path.with_suffix(".pdf"))
+    fig.savefig(out_path.with_suffix(".svg"))
     plt.close(fig)
 
 
 def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
     plot_df = df.dropna(subset=["python_fit_seconds", "fortran_fit_seconds"]).copy()
-    plot_df = plot_df.loc[plot_df["dataset"] != "gv84"].sort_values("fortran_vs_python_speedup")
-    fig, ax = plt.subplots(figsize=(10, 5))
+    plot_df = plot_df.sort_values("fortran_vs_python_speedup")
+    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     x = np.arange(len(plot_df))
     width = 0.42
-    ax.bar(x - width / 2, plot_df["fortran_fit_seconds"], width=width, label="Fortran (sec)", color="#1f77b4")
-    ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#ff7f0e")
+    ax.bar(x - width / 2, plot_df["fortran_fit_seconds"], width=width, label="Fortran (sec)", color="#454843")
+    ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#7D66D9")
     ax.set_xticks(x)
     ax.set_xticklabels(plot_df["dataset"], rotation=45)
     ax.set_ylabel("Wall time (seconds)")
-    ax.set_title("Runtime Comparison (gv84 excluded)")
+    ax.set_title("Runtime Comparison")
     ax.legend(frameon=False)
     ax.grid(True, axis="y", alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=180)
+    fig.savefig(out_path, dpi=300)
+    fig.savefig(out_path.with_suffix(".pdf"))
+    fig.savefig(out_path.with_suffix(".svg"))
     plt.close(fig)
 
 

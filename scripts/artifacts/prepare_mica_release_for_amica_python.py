@@ -75,19 +75,6 @@ def patch_mutualinfoalgo(path: Path) -> None:
             "algorithms = {  'Amica' 'AMICA-Python' 'Ext. Infomax' 'Pearson' 'Infomax' ...",
         )
 
-    skip_block = (
-        "      if strcmp(algorithms{algo}, 'AMICA-Python') && dat == 10\n"
-        "          h(:,algo,dat) = NaN;\n"
-        "          mir(algo,dat) = NaN;\n"
-        "          continue;\n"
-        "      end\n"
-    )
-    if skip_block not in text:
-        loop_anchor = "for algo=1:length(algorithms)\n   for dat=1:14\n"
-        if loop_anchor not in text:
-            raise ValueError(f"Could not find mutualinfoalgo.m loop anchor in {path}")
-        text = text.replace(loop_anchor, loop_anchor + skip_block)
-
     if not text.endswith("\n"):
         text += "\n"
     path.write_text(text)
@@ -158,7 +145,6 @@ def main() -> None:
     export_result = export_amica_python_to_mica_mat(
         python_run_root=python_run_root,
         out_dir=workdir / "icadecompositions",
-        excluded={"gv84"},
     )
 
     result = {
