@@ -10,6 +10,7 @@ DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = Path.home() / "amica_test_data" / "mica_release" / "datasets"
 DEFAULT_SBATCH = Path(__file__).resolve().parents[1] / "slurm" / "mica_python_dataset.sbatch"
 DEFAULT_BENCH_REPO = Path(__file__).resolve().parents[1]
+OPTIMIZER_CHOICES = ("em", "daarem")
 
 
 def main() -> None:
@@ -24,6 +25,7 @@ def main() -> None:
     parser.add_argument("--n-mixtures", type=int, default=3)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--optimizer", choices=OPTIMIZER_CHOICES, default="em")
     parser.add_argument("--verbose", type=int, default=0)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--time", default="12:00:00")
@@ -48,12 +50,13 @@ def main() -> None:
             f"--cpus-per-task={int(args.threads)}",
             f"--mem={args.mem}",
             f"--time={args.time}",
-            f"--job-name=micaP_{ds.stem}",
+            f"--job-name=micaP_{args.optimizer}_{ds.stem}",
             str(args.sbatch_script.expanduser().resolve()),
             str(ds.resolve()),
             str(run_dir),
             str(int(args.max_iter)),
             str(int(args.threads)),
+            str(args.optimizer),
             str(args.fortran_search_root.expanduser().resolve()),
             str(int(args.n_mixtures)),
             str(int(args.random_state)),

@@ -4,11 +4,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
+import sys
 import time
 from pathlib import Path
 
 import joblib
 import numpy as np
+import psutil
 
 from amica import AMICA
 from amica.utils.fortran import load_fortran_results, load_initial_weights
@@ -18,6 +21,23 @@ from mica_common import discover_fortran_out, infer_fortran_n_components, load_e
 
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = Path.home() / "amica_test_data" / "mica_release" / "datasets"
+OPTIMIZER_CHOICES = ("em", "daarem")
+
+
+def collect_environment_metadata() -> dict[str, object]:
+    return {
+        "sys_platform": sys.platform,
+        "python_version": sys.version,
+        "python_executable": sys.executable,
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "platform": platform.platform(),
+        "cpu_count_logical": psutil.cpu_count(logical=True),
+        "cpu_count_physical": psutil.cpu_count(logical=False),
+        "memory_total_bytes": psutil.virtual_memory().total,
+        "pid": os.getpid(),
+        "os_cpu_count": os.cpu_count(),
+    }
 
 
 def resolve_fortran_out(
@@ -46,6 +66,7 @@ def run_python(
     device: str,
     verbose: int,
     python_threads: int,
+    optimizer: str = "em",
 ) -> dict[str, object]:
     dataset_set = dataset_set.expanduser().resolve()
     fortran_out = fortran_out.expanduser().resolve()
@@ -74,6 +95,7 @@ def run_python(
         random_state=int(random_state),
         device=device,
         verbose=int(verbose),
+        optimizer=optimizer,
         w_init=w_init,
         sbeta_init=sbeta_init,
         mu_init=mu_init,
@@ -121,7 +143,9 @@ def run_python(
         "n_mixtures": int(n_mixtures),
         "random_state": int(random_state),
         "device": device,
+        "optimizer": optimizer,
         "python_threads": int(python_threads),
+        "environment": collect_environment_metadata(),
         "fit_started_at_epoch_seconds": float(fit_started_at_epoch_seconds),
         "fit_finished_at_epoch_seconds": float(fit_finished_at_epoch_seconds),
         "fit_seconds": float(fit_seconds),
@@ -178,6 +202,7 @@ def main() -> None:
     parser.add_argument("--n-mixtures", type=int, default=3)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--optimizer", choices=OPTIMIZER_CHOICES, default="em")
     parser.add_argument("--verbose", type=int, default=2)
     parser.add_argument("--python-threads", type=int, default=1)
     args = parser.parse_args()
@@ -200,6 +225,7 @@ def main() -> None:
         device=args.device,
         verbose=args.verbose,
         python_threads=args.python_threads,
+        optimizer=args.optimizer,
     )
     print(json.dumps(manifest, indent=2))
 

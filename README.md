@@ -284,11 +284,28 @@ Submit Python jobs:
 make slurm-python THREADS=4 MAX_ITER=1000
 ```
 
+To submit the Python batch with the DAAREM optimizer, invoke the submitter
+directly and pass `--optimizer daarem`:
+
+```bash
+/Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_python_slurm.py \
+  --datasets-dir ~/amica_test_data/mica_release/datasets \
+  --dataset-glob '*.set' \
+  --bench-root ./benchmark_runs \
+  --fortran-search-root ./benchmark_runs \
+  --threads 4 \
+  --max-iter 1000 \
+  --optimizer daarem
+```
+
+The default optimizer is `em`, so omit `--optimizer` or pass `--optimizer em`
+to run the original AMICA-Python optimization path.
+
 Or invoke submitters directly:
 
 ```bash
 python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 1000
-python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000
+python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000 --optimizer em
 ```
 
 Summarize a completed Fortran/Python benchmark pair:

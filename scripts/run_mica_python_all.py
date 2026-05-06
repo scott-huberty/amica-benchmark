@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from run_mica_fortran import DEFAULT_BENCH_ROOT, DEFAULT_DATASETS_DIR
-from run_mica_python import resolve_fortran_out, run_python
+from run_mica_python import OPTIMIZER_CHOICES, resolve_fortran_out, run_python
 
 
 def main() -> None:
@@ -30,6 +30,7 @@ def main() -> None:
     parser.add_argument("--n-mixtures", type=int, default=3)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--optimizer", choices=OPTIMIZER_CHOICES, default="em")
     parser.add_argument("--verbose", type=int, default=0)
     parser.add_argument("--python-threads", type=int, default=4)
     args = parser.parse_args()
@@ -64,12 +65,14 @@ def main() -> None:
                 device=args.device,
                 verbose=args.verbose,
                 python_threads=args.python_threads,
+                optimizer=args.optimizer,
             )
         )
 
     summary = {
         "batch_dir": str(batch_dir),
         "fortran_search_root": str(args.fortran_search_root.expanduser().resolve()),
+        "optimizer": args.optimizer,
         "n_datasets": len(manifests),
         "datasets": [str(ds) for ds in datasets],
         "runs": manifests,

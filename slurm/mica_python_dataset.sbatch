@@ -6,8 +6,8 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 11 ]; then
-  echo "Usage: $0 DATASET_SET RUN_DIR MAX_ITER THREADS FORTRAN_SEARCH_ROOT N_MIXTURES RANDOM_STATE DEVICE VERBOSE BENCH_ROOT BENCH_REPO [N_COMPONENTS]"
+if [ "$#" -lt 12 ]; then
+  echo "Usage: $0 DATASET_SET RUN_DIR MAX_ITER THREADS OPTIMIZER FORTRAN_SEARCH_ROOT N_MIXTURES RANDOM_STATE DEVICE VERBOSE BENCH_ROOT BENCH_REPO [N_COMPONENTS]"
   exit 1
 fi
 
@@ -15,17 +15,24 @@ DATASET_SET="$1"
 RUN_DIR="$2"
 MAX_ITER="$3"
 THREADS="$4"
-FORTRAN_SEARCH_ROOT="$5"
-N_MIXTURES="$6"
-RANDOM_STATE="$7"
-DEVICE="$8"
-VERBOSE="$9"
+OPTIMIZER="$5"
+FORTRAN_SEARCH_ROOT="$6"
+N_MIXTURES="$7"
+RANDOM_STATE="$8"
+DEVICE="$9"
 shift 9
+VERBOSE="$1"
+shift 1
 BENCH_ROOT="$1"
 shift 1
 BENCH_REPO="$1"
 shift 1
 N_COMPONENTS="${1:-}"
+
+if [ "${OPTIMIZER}" != "em" ] && [ "${OPTIMIZER}" != "daarem" ]; then
+  echo "Unsupported optimizer '${OPTIMIZER}'. Expected 'em' or 'daarem'."
+  exit 1
+fi
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
@@ -45,6 +52,7 @@ CMD=(
   --n-mixtures "${N_MIXTURES}"
   --random-state "${RANDOM_STATE}"
   --device "${DEVICE}"
+  --optimizer "${OPTIMIZER}"
   --verbose "${VERBOSE}"
   --python-threads "${THREADS}"
 )
