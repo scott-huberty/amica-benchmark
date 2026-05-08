@@ -43,7 +43,7 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--partition", default=DEFAULT_PARTITION, help="SLURM partition/queue. Use 'none' to omit.")
     parser.add_argument("--constraint", default=DEFAULT_CONSTRAINT, help="SLURM node constraint. Use 'none' to omit.")
-    parser.add_argument("--time", default="12:00:00")
+    parser.add_argument("--time", default="3:00:00")
     parser.add_argument("--mem", default="16G")
     parser.add_argument("--bench-repo", type=Path, default=DEFAULT_BENCH_REPO)
     parser.add_argument("--sbatch-script", type=Path, default=DEFAULT_SBATCH)

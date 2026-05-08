@@ -241,10 +241,11 @@ make PYTHON=~/envs/miniforge/amica_env/bin/python python-all
 Each submitted job requests:
 - `--cpus-per-task=4`
 - `--mem=16G`
-- `--time=12:00:00`
-- `--max-iter=1000`
+- `--time=3:00:00`
+- `--max-iter=2000`
 - `--partition=epyc-64`
 - `--constraint=epyc-7513`
+- Python submitter verbosity defaults to `--verbose 2`
 
 The partition and constraint defaults are for USC CARC Discovery and are used to
 reduce run-to-run performance swings by keeping benchmark jobs on the same CPU
@@ -263,19 +264,19 @@ python scripts/submit_mica_python_slurm.py \
   --partition cpu \
   --constraint none \
   --threads 4 \
-  --max-iter 1000
+  --max-iter 2000
 ```
 
 Equivalent `make` override:
 
 ```bash
-make slurm-python THREADS=4 MAX_ITER=1000 SLURM_PARTITION=cpu SLURM_CONSTRAINT=none
+make slurm-python THREADS=4 MAX_ITER=2000 SLURM_PARTITION=cpu SLURM_CONSTRAINT=none
 ```
 
 Submit Fortran jobs:
 
 ```bash
-make slurm-fortran THREADS=4 MAX_ITER=1000
+make slurm-fortran THREADS=4 MAX_ITER=2000
 ```
 
 For Apptainer-backed SLURM submission:
@@ -293,7 +294,7 @@ python scripts/submit_mica_fortran_slurm.py \
   --partition epyc-64 \
   --constraint epyc-7513 \
   --threads 4 \
-  --max-iter 1000 \
+  --max-iter 2000 \
   --container-runtime apptainer \
   --apptainer-image /path/to/containers/amica.sif
 ```
@@ -307,13 +308,13 @@ python scripts/submit_mica_fortran_slurm.py \
   --partition epyc-64 \
   --constraint epyc-7513 \
   --threads 4 \
-  --max-iter 1000
+  --max-iter 2000
 ```
 
 Submit Python jobs:
 
 ```bash
-make slurm-python THREADS=4 MAX_ITER=1000
+make slurm-python THREADS=4 MAX_ITER=2000
 ```
 
 To submit the Python batch with the DAAREM optimizer, invoke the submitter
@@ -328,7 +329,7 @@ directly and pass `--optimizer daarem`:
   --threads 4 \
   --partition epyc-64 \
   --constraint epyc-7513 \
-  --max-iter 1000 \
+  --max-iter 2000 \
   --optimizer daarem
 ```
 
@@ -338,8 +339,8 @@ to run the original AMICA-Python optimization path.
 Or invoke submitters directly:
 
 ```bash
-python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 1000 --partition epyc-64 --constraint epyc-7513
-python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000 --partition epyc-64 --constraint epyc-7513 --optimizer em
+python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 2000 --partition epyc-64 --constraint epyc-7513
+python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 2000 --partition epyc-64 --constraint epyc-7513 --optimizer em
 ```
 
 Summarize a completed Fortran/Python benchmark pair:
