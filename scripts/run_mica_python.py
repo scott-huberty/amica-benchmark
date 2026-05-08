@@ -85,8 +85,11 @@ def run_python(
         n_mixtures=int(n_mixtures),
     )
 
-    os.environ["OPM_NUM_THREADS"] = str(int(python_threads))
-    os.environ["MKL_NUM_THREADS"] = str(int(python_threads))
+    thread_count = str(int(python_threads))
+    os.environ["OMP_NUM_THREADS"] = thread_count
+    os.environ["MKL_NUM_THREADS"] = thread_count
+    os.environ["OPENBLAS_NUM_THREADS"] = thread_count
+    os.environ["NUMEXPR_NUM_THREADS"] = thread_count
 
     model = AMICA(
         n_components=None if n_components is None else int(n_components),

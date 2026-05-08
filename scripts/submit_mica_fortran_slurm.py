@@ -10,6 +10,18 @@ DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = Path.home() / "amica_test_data" / "mica_release" / "datasets"
 DEFAULT_SBATCH = Path(__file__).resolve().parents[1] / "slurm" / "mica_fortran_dataset.sbatch"
 DEFAULT_BENCH_REPO = Path(__file__).resolve().parents[1]
+DEFAULT_PARTITION = "epyc-64"
+DEFAULT_CONSTRAINT = "epyc-7513"
+OMIT_SBATCH_VALUE = {"", "none", "null", "false", "0"}
+
+
+def add_optional_sbatch_flag(cmd: list[str], flag: str, value: str | None) -> None:
+    if value is None:
+        return
+    normalized = str(value).strip()
+    if normalized.lower() in OMIT_SBATCH_VALUE:
+        return
+    cmd.append(f"{flag}={normalized}")
 
 
 def main() -> None:
@@ -29,6 +41,8 @@ def main() -> None:
     parser.add_argument("--fortran-image", default="shuberty/amica:latest")
     parser.add_argument("--apptainer-image", default=None)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--partition", default=DEFAULT_PARTITION, help="SLURM partition/queue. Use 'none' to omit.")
+    parser.add_argument("--constraint", default=DEFAULT_CONSTRAINT, help="SLURM node constraint. Use 'none' to omit.")
     parser.add_argument("--time", default="12:00:00")
     parser.add_argument("--mem", default="16G")
     parser.add_argument("--bench-repo", type=Path, default=DEFAULT_BENCH_REPO)
@@ -46,23 +60,27 @@ def main() -> None:
 
     for ds in datasets:
         run_dir = batch_dir / ds.stem
-        cmd = [
-            "sbatch",
-            f"--cpus-per-task={int(args.threads)}",
-            f"--mem={args.mem}",
-            f"--time={args.time}",
-            f"--job-name=micaF_{ds.stem}",
-            str(args.sbatch_script.expanduser().resolve()),
-            str(ds.resolve()),
-            str(run_dir),
-            str(int(args.max_iter)),
-            str(int(args.threads)),
-            str(args.fortran_image),
-            str(int(args.n_mixtures)),
-            str(args.container_runtime),
-            "" if args.apptainer_image is None else str(args.apptainer_image),
-            str(args.bench_repo.expanduser().resolve()),
-        ]
+        cmd = ["sbatch"]
+        add_optional_sbatch_flag(cmd, "--partition", args.partition)
+        add_optional_sbatch_flag(cmd, "--constraint", args.constraint)
+        cmd.extend(
+            [
+                f"--cpus-per-task={int(args.threads)}",
+                f"--mem={args.mem}",
+                f"--time={args.time}",
+                f"--job-name=micaF_{ds.stem}",
+                str(args.sbatch_script.expanduser().resolve()),
+                str(ds.resolve()),
+                str(run_dir),
+                str(int(args.max_iter)),
+                str(int(args.threads)),
+                str(args.fortran_image),
+                str(int(args.n_mixtures)),
+                str(args.container_runtime),
+                "" if args.apptainer_image is None else str(args.apptainer_image),
+                str(args.bench_repo.expanduser().resolve()),
+            ]
+        )
         if args.n_components is not None:
             cmd.append(str(int(args.n_components)))
 

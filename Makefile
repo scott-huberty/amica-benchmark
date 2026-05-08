@@ -6,6 +6,8 @@ CONTAINER_RUNTIME ?= docker
 APPTAINER_IMAGE ?=
 THREADS ?= 4
 MAX_ITER ?= 2000
+SLURM_PARTITION ?= epyc-64
+SLURM_CONSTRAINT ?= epyc-7513
 MATLAB_IMAGE ?= mica-matlab:r2012b
 MATLAB_LICENSE_SERVER ?=
 MATLAB_FILE_INSTALLATION_KEY ?=
@@ -54,6 +56,8 @@ slurm-fortran:
 	  --fortran-image $(FORTRAN_IMAGE) \
 	  $(if $(APPTAINER_IMAGE),--apptainer-image $(APPTAINER_IMAGE),) \
 	  --threads $(THREADS) \
+	  $(if $(SLURM_PARTITION),--partition $(SLURM_PARTITION),--partition none) \
+	  $(if $(SLURM_CONSTRAINT),--constraint $(SLURM_CONSTRAINT),--constraint none) \
 	  --max-iter $(MAX_ITER)
 
 slurm-python:
@@ -62,6 +66,8 @@ slurm-python:
 	  --bench-root $(BENCH_ROOT) \
 	  --fortran-search-root $(BENCH_ROOT) \
 	  --threads $(THREADS) \
+	  $(if $(SLURM_PARTITION),--partition $(SLURM_PARTITION),--partition none) \
+	  $(if $(SLURM_CONSTRAINT),--constraint $(SLURM_CONSTRAINT),--constraint none) \
 	  --max-iter $(MAX_ITER)
 
 # TODO: make command for summarize_benchmark_runs?

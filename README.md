@@ -243,6 +243,34 @@ Each submitted job requests:
 - `--mem=16G`
 - `--time=12:00:00`
 - `--max-iter=1000`
+- `--partition=epyc-64`
+- `--constraint=epyc-7513`
+
+The partition and constraint defaults are for USC CARC Discovery and are used to
+reduce run-to-run performance swings by keeping benchmark jobs on the same CPU
+architecture. When running on another HPC, set these to values that exist on that
+cluster. If your scheduler does not use node constraints, or you do not want to
+pin a CPU model, pass `--constraint none` with the submitters or
+`SLURM_CONSTRAINT=none` with `make`; `none`, `null`, `false`, `0`, and an empty
+string are treated as "do not pass `--constraint`". You can similarly omit
+`--partition` by passing `--partition none`, though most clusters require or
+prefer an explicit partition/queue.
+
+Example for another HPC:
+
+```bash
+python scripts/submit_mica_python_slurm.py \
+  --partition cpu \
+  --constraint none \
+  --threads 4 \
+  --max-iter 1000
+```
+
+Equivalent `make` override:
+
+```bash
+make slurm-python THREADS=4 MAX_ITER=1000 SLURM_PARTITION=cpu SLURM_CONSTRAINT=none
+```
 
 Submit Fortran jobs:
 
@@ -256,12 +284,14 @@ For Apptainer-backed SLURM submission:
 make slurm-fortran THREADS=4 MAX_ITER=2000 CONTAINER_RUNTIME=apptainer APPTAINER_IMAGE=/path/to/containers/amica.sif
 ```
 
-To one just a single subject:
+To run just a single subject:
 
 ```bash
 python scripts/submit_mica_fortran_slurm.py \
   --datasets-dir ~/amica_test_data/mica_release/datasets \
   --dataset-glob 'cz84.set' \
+  --partition epyc-64 \
+  --constraint epyc-7513 \
   --threads 4 \
   --max-iter 1000 \
   --container-runtime apptainer \
@@ -274,6 +304,8 @@ python scripts/submit_mica_fortran_slurm.py \
   --datasets-dir ~/amica_test_data/mica_release/datasets \
   --dataset-glob 'cz84.set' \
   --fortran-search-root ./benchmark_runs \
+  --partition epyc-64 \
+  --constraint epyc-7513 \
   --threads 4 \
   --max-iter 1000
 ```
@@ -294,6 +326,8 @@ directly and pass `--optimizer daarem`:
   --bench-root ./benchmark_runs \
   --fortran-search-root ./benchmark_runs \
   --threads 4 \
+  --partition epyc-64 \
+  --constraint epyc-7513 \
   --max-iter 1000 \
   --optimizer daarem
 ```
@@ -304,8 +338,8 @@ to run the original AMICA-Python optimization path.
 Or invoke submitters directly:
 
 ```bash
-python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 1000
-python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000 --optimizer em
+python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 1000 --partition epyc-64 --constraint epyc-7513
+python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 1000 --partition epyc-64 --constraint epyc-7513 --optimizer em
 ```
 
 Summarize a completed Fortran/Python benchmark pair:
