@@ -62,9 +62,6 @@ def run_fortran(
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
     data = load_eeglab_set(dataset_set)
-    n_samples = int(data.shape[0])
-    n_features = int(data.shape[1])
-    block_size = max(1, n_samples // max(fortran_threads, 2))
 
     data_fpath = dataset_dir / f"{dataset_name}_concat.fdt"
     write_data(data, data_fpath)
@@ -80,12 +77,11 @@ def run_fortran(
         "max_iter": int(max_iter),
         "max_threads": int(fortran_threads),
         "num_mix_comps": int(n_mixtures),
-        "block_size": int(block_size),
     }
     if n_components is not None:
         param_kwargs["pcakeep"] = int(n_components)
 
-    write_param_file(
+    _, params = write_param_file(
         param_path,
         data=data,
         **param_kwargs,
@@ -130,7 +126,7 @@ def run_fortran(
         "dataset_set": str(dataset_set),
         "dataset_name": dataset_name,
         "data_shape_samples_features": [int(data.shape[0]), int(data.shape[1])],
-        "block_size": int(block_size),
+        "block_size": int(params.block_size),
         "max_iter": int(max_iter),
         "n_components": None if n_components is None else int(n_components),
         "n_mixtures": int(n_mixtures),
