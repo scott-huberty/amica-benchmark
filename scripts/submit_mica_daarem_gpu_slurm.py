@@ -37,7 +37,7 @@ def main() -> None:
     parser.add_argument("--n-mixtures", type=int, default=3)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--verbose", type=int, default=2)
+    parser.add_argument("--verbose", type=int, default=0)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--n-runs", type=int, default=1)
     parser.add_argument("--label", default="")
