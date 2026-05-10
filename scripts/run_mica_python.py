@@ -4,40 +4,28 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import platform
-import sys
 import time
 from pathlib import Path
 
 import joblib
 import numpy as np
-import psutil
 
 from amica import AMICA
 from amica.utils.fortran import load_fortran_results, load_initial_weights
 
-from mica_common import discover_fortran_out, infer_fortran_n_components, load_eeglab_set
+from mica_common import (
+    clean_ll,
+    collect_environment_metadata,
+    count_ll_iterations,
+    discover_fortran_out,
+    infer_fortran_n_components,
+    load_eeglab_set,
+)
 
 
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
 DEFAULT_DATASETS_DIR = Path.home() / "amica_test_data" / "mica_release" / "datasets"
 OPTIMIZER_CHOICES = ("em", "daarem")
-
-
-def collect_environment_metadata() -> dict[str, object]:
-    return {
-        "sys_platform": sys.platform,
-        "python_version": sys.version,
-        "python_executable": sys.executable,
-        "machine": platform.machine(),
-        "processor": platform.processor(),
-        "platform": platform.platform(),
-        "cpu_count_logical": psutil.cpu_count(logical=True),
-        "cpu_count_physical": psutil.cpu_count(logical=False),
-        "memory_total_bytes": psutil.virtual_memory().total,
-        "pid": os.getpid(),
-        "os_cpu_count": os.cpu_count(),
-    }
 
 
 def resolve_fortran_out(
@@ -133,8 +121,8 @@ def run_python(
     )
 
     ll_f = fres["LL"]
-    ll_f_nz = ll_f[ll_f != 0]
-    ll_p_nz = ll[ll != 0]
+    ll_f_nz = clean_ll(ll_f)
+    ll_p_nz = clean_ll(ll)
 
     manifest = {
         "dataset_set": str(dataset_set),
@@ -154,6 +142,7 @@ def run_python(
         "fit_seconds": float(fit_seconds),
         "python_results_npz": str(out_npz),
         "python_model_joblib": str(model_path),
+        "python_n_iter": count_ll_iterations(ll),
         "fortran_ll_final": float(ll_f_nz[-1]) if ll_f_nz.size else float("nan"),
         "python_ll_final": float(ll_p_nz[-1]) if ll_p_nz.size else float("nan"),
     }

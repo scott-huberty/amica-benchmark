@@ -1,14 +1,156 @@
 from __future__ import annotations
 
+import os
+import platform
+import shutil
+import socket
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
+import psutil
 
 
 EPOCH_SLICE_BY_DATASET = {
     # gv84 contains a long noisy tail; match the clean segment used for AMICA reruns.
     "gv84": slice(None, 665),
 }
+
+
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text().strip()
+    except OSError:
+        return None
+
+
+def _get_proc_status_value(name: str) -> str | None:
+    status = _read_text(Path("/proc/self/status"))
+    if status is None:
+        return None
+    prefix = f"{name}:"
+    for line in status.splitlines():
+        if line.startswith(prefix):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def _get_cpu_model() -> str | None:
+    if shutil.which("lscpu") is not None:
+        try:
+            result = subprocess.run(
+                ["lscpu"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+        except (OSError, subprocess.SubprocessError):
+            result = None
+        if result is not None and result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if line.startswith("Model name:"):
+                    return line.split(":", 1)[1].strip()
+
+    cpuinfo = _read_text(Path("/proc/cpuinfo"))
+    if cpuinfo is None:
+        return platform.processor() or None
+    for line in cpuinfo.splitlines():
+        if line.startswith("model name"):
+            return line.split(":", 1)[1].strip()
+    return platform.processor() or None
+
+
+def _get_cpu_affinity() -> list[int] | None:
+    try:
+        return sorted(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return None
+
+
+def _get_thread_env() -> dict[str, str | None]:
+    return {
+        name: os.environ.get(name)
+        for name in (
+            "OMP_NUM_THREADS",
+            "MKL_NUM_THREADS",
+            "OPENBLAS_NUM_THREADS",
+            "NUMEXPR_NUM_THREADS",
+            "VECLIB_MAXIMUM_THREADS",
+        )
+    }
+
+
+def _get_slurm_env() -> dict[str, str | None]:
+    return {
+        name: os.environ.get(name)
+        for name in (
+            "SLURM_JOB_ID",
+            "SLURM_JOB_NAME",
+            "SLURM_JOB_NODELIST",
+            "SLURM_NODELIST",
+            "SLURMD_NODENAME",
+            "SLURM_NODEID",
+            "SLURM_NTASKS",
+            "SLURM_TASKS_PER_NODE",
+            "SLURM_CPUS_PER_TASK",
+            "SLURM_CPUS_ON_NODE",
+            "SLURM_MEM_PER_NODE",
+            "SLURM_MEM_PER_CPU",
+            "SLURM_SUBMIT_HOST",
+            "SLURM_SUBMIT_DIR",
+            "SLURM_CLUSTER_NAME",
+            "SLURM_PARTITION",
+            "SLURM_JOB_ACCOUNT",
+            "SLURM_JOB_QOS",
+        )
+    }
+
+
+def collect_environment_metadata() -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "sys_platform": sys.platform,
+        "python_version": sys.version,
+        "python_executable": sys.executable,
+        "hostname": socket.gethostname(),
+        "fqdn": socket.getfqdn(),
+        "node_name": os.environ.get("SLURMD_NODENAME") or socket.gethostname(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "platform": platform.platform(),
+        "cpu_model": _get_cpu_model(),
+        "cpu_count_logical": psutil.cpu_count(logical=True),
+        "cpu_count_physical": psutil.cpu_count(logical=False),
+        "cpu_affinity": _get_cpu_affinity(),
+        "cpus_allowed_list": _get_proc_status_value("Cpus_allowed_list"),
+        "mems_allowed_list": _get_proc_status_value("Mems_allowed_list"),
+        "memory_total_bytes": psutil.virtual_memory().total,
+        "pid": os.getpid(),
+        "os_cpu_count": os.cpu_count(),
+        "thread_env": _get_thread_env(),
+        "slurm": _get_slurm_env(),
+    }
+    try:
+        import torch
+    except ImportError:
+        pass
+    else:
+        metadata["torch_num_threads"] = torch.get_num_threads()
+        metadata["torch_num_interop_threads"] = torch.get_num_interop_threads()
+    return metadata
+
+
+def clean_ll(values: np.ndarray) -> np.ndarray:
+    """Return finite nonzero log-likelihood values from an AMICA LL curve."""
+    arr = np.asarray(values, dtype=np.float64).ravel()
+    arr = arr[np.isfinite(arr)]
+    return arr[arr != 0]
+
+
+def count_ll_iterations(values: np.ndarray) -> int:
+    """Count completed AMICA iterations represented in an LL curve."""
+    return int(clean_ll(values).size)
 
 
 def load_eeglab_set(set_path: Path) -> np.ndarray:

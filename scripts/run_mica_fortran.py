@@ -9,9 +9,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+
 from amica.utils.fortran import write_data, write_param_file
 
-from mica_common import load_eeglab_set
+from mica_common import count_ll_iterations, collect_environment_metadata, load_eeglab_set
 
 
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
@@ -121,6 +123,10 @@ def run_fortran(
     _run_and_tee(cmd, log_path)
     fit_finished_at_epoch_seconds = time.time()
     fit_seconds = time.perf_counter() - fit_started_at_perf_counter
+    ll_path = fortran_out / "LL"
+    fortran_n_iter = None
+    if ll_path.exists():
+        fortran_n_iter = count_ll_iterations(np.fromfile(ll_path, dtype=np.float64))
 
     manifest = {
         "dataset_set": str(dataset_set),
@@ -138,9 +144,11 @@ def run_fortran(
         "container_runtime": container_runtime,
         "apptainer_image": apptainer_image,
         "fortran_threads": int(fortran_threads),
+        "environment": collect_environment_metadata(),
         "fit_started_at_epoch_seconds": float(fit_started_at_epoch_seconds),
         "fit_finished_at_epoch_seconds": float(fit_finished_at_epoch_seconds),
         "fit_seconds": float(fit_seconds),
+        "fortran_n_iter": fortran_n_iter,
         "fortran_console_log": str(log_path),
     }
     manifest_path = run_dir / "fortran_run.json"
