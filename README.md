@@ -336,6 +336,34 @@ directly and pass `--optimizer daarem`:
 The default optimizer is `em`, so omit `--optimizer` or pass `--optimizer em`
 to run the original AMICA-Python optimization path.
 
+To submit one GPU DAAREM hyperparameter sweep job per MICA recording:
+
+```bash
+cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
+
+PYTHON_BIN=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
+/Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_daarem_gpu_slurm.py \
+  --datasets-dir ~/amica_test_data/mica_release/datasets \
+  --dataset-glob '*.set' \
+  --bench-root ./benchmark_runs \
+  --fortran-search-root ./benchmark_runs/mica_release_fortran_slurm_20260509_230036 \
+  --run-tag mica_release_daarem_gpu_sweep \
+  --max-iter 2000 \
+  --n-runs 1 \
+  --partition gpu \
+  --gres gpu:1 \
+  --threads 2 \
+  --mem 24G \
+  --time 4:00:00
+```
+
+The default sweep covers `accelerator_order=1,2,3`,
+`accelerator_start_iter=1,5,10,25`, `accelerator_period=1,2,5,10`, and
+`accelerator_validate_candidate=true,false`, for 96 fits per recording. Each
+recording writes `daarem_sweep.csv`, `daarem_ll_curves.npz`, and
+`daarem_sweep_run.json` under its run directory. Adjust `--partition` and
+`--gres` if your cluster uses different GPU resource names.
+
 Or invoke submitters directly:
 
 ```bash

@@ -36,7 +36,9 @@ BASE_FIELDS = [
     "run_index",
     "random_state",
     "fit_seconds",
+    "max_iter",
     "n_iter",
+    "converged",
     "final_log_likelihood",
     "peak_log_likelihood",
     "initial_log_likelihood",
@@ -109,13 +111,16 @@ def row_for_csv(row: dict[str, Any], fieldnames: list[str]) -> dict[str, Any]:
 def summarize_ll(
     ll_values: np.ndarray,
     *,
+    max_iter: int,
     probes: list[int],
     fortran_final_ll: float,
 ) -> dict[str, Any]:
     ll = clean_ll(ll_values)
     if ll.size == 0:
         row: dict[str, Any] = {
+            "max_iter": int(max_iter),
             "n_iter": 0,
+            "converged": "no",
             "final_log_likelihood": float("nan"),
             "peak_log_likelihood": float("nan"),
             "initial_log_likelihood": float("nan"),
@@ -132,8 +137,11 @@ def summarize_ll(
         deltas = np.diff(ll)
         last_deltas = deltas[-5:]
         final_ll = float(ll[-1])
+        n_iter = int(ll.size)
         row = {
-            "n_iter": int(ll.size),
+            "max_iter": int(max_iter),
+            "n_iter": n_iter,
+            "converged": "yes" if n_iter < int(max_iter) else "no",
             "final_log_likelihood": final_ll,
             "peak_log_likelihood": float(np.max(ll)),
             "initial_log_likelihood": float(ll[0]),
@@ -360,6 +368,7 @@ def main() -> None:
             )
             row = summarize_ll(
                 ll,
+                max_iter=int(args.max_iter),
                 probes=probes,
                 fortran_final_ll=fortran_final_ll,
             )
@@ -419,6 +428,7 @@ def main() -> None:
         "n_configs": len(configs),
         "n_fits": len(rows),
         "configs": configs,
+        "results": rows,
         "csv": str(csv_path),
         "ll_curves_npz": str(ll_npz),
     }
