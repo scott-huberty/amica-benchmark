@@ -69,11 +69,29 @@ def _get_cpu_affinity() -> list[int] | None:
         return None
 
 
+def _get_thread_cpu_allowed_lists() -> dict[str, str]:
+    task_dir = Path("/proc/self/task")
+    if not task_dir.exists():
+        return {}
+    allowed: dict[str, str] = {}
+    for status_path in sorted(task_dir.glob("*/status")):
+        status = _read_text(status_path)
+        if status is None:
+            continue
+        for line in status.splitlines():
+            if line.startswith("Cpus_allowed_list:"):
+                allowed[status_path.parent.name] = line.split(":", 1)[1].strip()
+                break
+    return allowed
+
+
 def _get_thread_env() -> dict[str, str | None]:
     return {
         name: os.environ.get(name)
         for name in (
             "OMP_NUM_THREADS",
+            "OMP_PROC_BIND",
+            "OMP_PLACES",
             "MKL_NUM_THREADS",
             "OPENBLAS_NUM_THREADS",
             "NUMEXPR_NUM_THREADS",
@@ -124,6 +142,7 @@ def collect_environment_metadata() -> dict[str, object]:
         "cpu_count_physical": psutil.cpu_count(logical=False),
         "cpu_affinity": _get_cpu_affinity(),
         "cpus_allowed_list": _get_proc_status_value("Cpus_allowed_list"),
+        "thread_cpus_allowed_list": _get_thread_cpu_allowed_lists(),
         "mems_allowed_list": _get_proc_status_value("Mems_allowed_list"),
         "memory_total_bytes": psutil.virtual_memory().total,
         "pid": os.getpid(),
