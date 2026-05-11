@@ -318,7 +318,8 @@ make slurm-python THREADS=4 MAX_ITER=2000
 ```
 
 To submit the Python batch with the DAAREM optimizer, invoke the submitter
-directly and pass `--optimizer daarem`:
+directly and pass `--optimizer daarem`. Use `--accelerator-order` to override
+the AMICA-Python default DAAREM history/order for the run:
 
 ```bash
 /Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_python_slurm.py \
@@ -330,7 +331,8 @@ directly and pass `--optimizer daarem`:
   --partition epyc-64 \
   --constraint epyc-7513 \
   --max-iter 2000 \
-  --optimizer daarem
+  --optimizer daarem \
+  --accelerator-order 3
 ```
 
 The default optimizer is `em`, so omit `--optimizer` or pass `--optimizer em`

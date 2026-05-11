@@ -8,6 +8,7 @@ set -euo pipefail
 
 if [ "$#" -lt 12 ]; then
   echo "Usage: $0 DATASET_SET RUN_DIR MAX_ITER THREADS OPTIMIZER FORTRAN_SEARCH_ROOT N_MIXTURES RANDOM_STATE DEVICE VERBOSE BENCH_ROOT BENCH_REPO [N_COMPONENTS]"
+  echo "Optional: set AMICA_ACCELERATOR_ORDER to override accelerator_order."
   exit 1
 fi
 
@@ -57,6 +58,9 @@ CMD=(
   --verbose "${VERBOSE}"
   --python-threads "${THREADS}"
 )
+if [ -n "${AMICA_ACCELERATOR_ORDER:-}" ]; then
+  CMD+=(--accelerator-order "${AMICA_ACCELERATOR_ORDER}")
+fi
 if [ -n "${N_COMPONENTS}" ]; then
   CMD+=(--n-components "${N_COMPONENTS}")
 fi

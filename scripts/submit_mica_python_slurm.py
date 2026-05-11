@@ -38,6 +38,12 @@ def main() -> None:
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--optimizer", choices=OPTIMIZER_CHOICES, default="em")
+    parser.add_argument(
+        "--accelerator-order",
+        type=int,
+        default=None,
+        help="Override accelerator_order for DAAREM jobs. Leave unset to use AMICA defaults.",
+    )
     parser.add_argument("--verbose", type=int, default=2)
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--partition", default=DEFAULT_PARTITION, help="SLURM partition/queue. Use 'none' to omit.")
@@ -62,6 +68,10 @@ def main() -> None:
         cmd = ["sbatch"]
         add_optional_sbatch_flag(cmd, "--partition", args.partition)
         add_optional_sbatch_flag(cmd, "--constraint", args.constraint)
+        accelerator_order = (
+            "" if args.accelerator_order is None else str(int(args.accelerator_order))
+        )
+        cmd.append(f"--export=ALL,AMICA_ACCELERATOR_ORDER={accelerator_order}")
         cmd.extend(
             [
                 f"--cpus-per-task={int(args.threads)}",

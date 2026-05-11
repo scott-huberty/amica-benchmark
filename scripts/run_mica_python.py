@@ -55,6 +55,7 @@ def run_python(
     verbose: int,
     python_threads: int,
     optimizer: str = "em",
+    accelerator_order: int | None = None,
 ) -> dict[str, object]:
     dataset_set = dataset_set.expanduser().resolve()
     fortran_out = fortran_out.expanduser().resolve()
@@ -79,6 +80,10 @@ def run_python(
     os.environ["OPENBLAS_NUM_THREADS"] = thread_count
     os.environ["NUMEXPR_NUM_THREADS"] = thread_count
 
+    optimizer_kwargs = {}
+    if accelerator_order is not None:
+        optimizer_kwargs["accelerator_order"] = int(accelerator_order)
+
     model = AMICA(
         n_components=None if n_components is None else int(n_components),
         n_mixtures=int(n_mixtures),
@@ -87,6 +92,7 @@ def run_python(
         device=device,
         verbose=int(verbose),
         optimizer=optimizer,
+        optimizer_kwargs=optimizer_kwargs or None,
         w_init=w_init,
         sbeta_init=sbeta_init,
         mu_init=mu_init,
@@ -135,6 +141,7 @@ def run_python(
         "random_state": int(random_state),
         "device": device,
         "optimizer": optimizer,
+        "optimizer_kwargs": optimizer_kwargs,
         "python_threads": int(python_threads),
         "environment": collect_environment_metadata(),
         "fit_started_at_epoch_seconds": float(fit_started_at_epoch_seconds),
@@ -195,6 +202,12 @@ def main() -> None:
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--optimizer", choices=OPTIMIZER_CHOICES, default="em")
+    parser.add_argument(
+        "--accelerator-order",
+        type=int,
+        default=None,
+        help="Override accelerator_order for optimizer='daarem'. Leave unset to use AMICA defaults.",
+    )
     parser.add_argument("--verbose", type=int, default=2)
     parser.add_argument("--python-threads", type=int, default=1)
     args = parser.parse_args()
@@ -218,6 +231,7 @@ def main() -> None:
         verbose=args.verbose,
         python_threads=args.python_threads,
         optimizer=args.optimizer,
+        accelerator_order=args.accelerator_order,
     )
     print(json.dumps(manifest, indent=2))
 
