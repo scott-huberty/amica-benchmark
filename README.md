@@ -360,8 +360,8 @@ PYTHON_BIN=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
   --max-iter 2000 \
   --container-runtime apptainer \
   --apptainer-image ./amica.sif \
-  --time 10:00:00 \
-  --mem 24G
+  --time 6:00:00 \
+  --mem 16G
 ```
 
 Within each dataset directory, outputs are written to `fortran/`, `python_em/`,
