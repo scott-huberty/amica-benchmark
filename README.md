@@ -338,6 +338,36 @@ the AMICA-Python default DAAREM history/order for the run:
 The default optimizer is `em`, so omit `--optimizer` or pass `--optimizer em`
 to run the original AMICA-Python optimization path.
 
+To submit a paired golden benchmark, use the triplet submitter. Each SLURM job
+runs Fortran, AMICA-Python EM, and AMICA-Python DAAREM serially for one dataset
+inside the same allocation, reducing node/load variance between methods:
+
+```bash
+cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
+
+CONDA_MODULE=conda \
+CONDA_ENV=amica-benchmark \
+APPTAINER_MODULE=apptainer \
+PYTHON_BIN=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
+/Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_triplet_slurm.py \
+  --datasets-dir ~/amica_test_data/mica_release/datasets \
+  --dataset-glob '*.set' \
+  --bench-root ./benchmark_runs \
+  --run-tag mica_release_triplet_golden \
+  --threads 4 \
+  --partition epyc-64 \
+  --constraint epyc-7513 \
+  --max-iter 2000 \
+  --container-runtime apptainer \
+  --apptainer-image ./amica.sif \
+  --time 10:00:00 \
+  --mem 24G
+```
+
+Within each dataset directory, outputs are written to `fortran/`, `python_em/`,
+and `python_daarem/`. Omit `CONDA_MODULE` and `CONDA_ENV` if the submitted
+`PYTHON_BIN` already works in non-interactive jobs.
+
 To submit one GPU DAAREM hyperparameter sweep job per MICA recording:
 
 ```bash
