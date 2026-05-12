@@ -24,6 +24,10 @@ N_COMPONENTS="${10:-}"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
+if [ "${CONTAINER_RUNTIME}" = "apptainer" ] && command -v module >/dev/null 2>&1; then
+  module load "${APPTAINER_MODULE:-apptainer}"
+fi
+
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-$THREADS}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-$THREADS}"
 export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-$THREADS}"
