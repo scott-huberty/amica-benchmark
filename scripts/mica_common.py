@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import os
 import platform
+import hashlib
+import json
 import shutil
 import socket
 import subprocess
 import sys
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
@@ -98,6 +101,136 @@ def _get_thread_env() -> dict[str, str | None]:
             "VECLIB_MAXIMUM_THREADS",
         )
     }
+
+
+def _run_capture(cmd: list[str], timeout: int = 5) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _git_metadata(path: Path) -> dict[str, object]:
+    result: dict[str, object] = {"path": str(path)}
+    git_path = path.parent if path.is_file() else path
+    root_proc = _run_capture(["git", "-C", str(git_path), "rev-parse", "--show-toplevel"])
+    if root_proc is None or root_proc.returncode != 0:
+        result["available"] = False
+        return result
+
+    root = root_proc.stdout.strip()
+    result["available"] = True
+    result["root"] = root
+    for key, args in {
+        "commit": ["rev-parse", "HEAD"],
+        "branch": ["rev-parse", "--abbrev-ref", "HEAD"],
+    }.items():
+        proc = _run_capture(["git", "-C", root, *args])
+        if proc is not None and proc.returncode == 0:
+            result[key] = proc.stdout.strip()
+    dirty_proc = _run_capture(["git", "-C", root, "status", "--porcelain"])
+    if dirty_proc is not None and dirty_proc.returncode == 0:
+        result["dirty"] = bool(dirty_proc.stdout.strip())
+    remote_proc = _run_capture(["git", "-C", root, "config", "--get", "remote.origin.url"])
+    if remote_proc is not None and remote_proc.returncode == 0:
+        result["remote_origin_url"] = remote_proc.stdout.strip()
+    return result
+
+
+def _sha256_file(path: Path) -> str | None:
+    try:
+        with path.open("rb") as f:
+            digest = hashlib.sha256()
+            for block in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def collect_amica_python_metadata() -> dict[str, object]:
+    metadata_out: dict[str, object] = {
+        "package": "amica-python",
+    }
+    try:
+        import amica
+    except ImportError as exc:
+        metadata_out["available"] = False
+        metadata_out["error"] = repr(exc)
+        return metadata_out
+
+    metadata_out["available"] = True
+    metadata_out["module_file"] = str(Path(amica.__file__).resolve())
+    metadata_out["module_version"] = getattr(amica, "__version__", None)
+    try:
+        metadata_out["installed_version"] = metadata.version("amica-python")
+    except metadata.PackageNotFoundError:
+        metadata_out["installed_version"] = None
+    metadata_out["git"] = _git_metadata(Path(amica.__file__).resolve())
+    return metadata_out
+
+
+def collect_fortran_software_metadata(
+    *,
+    fortran_image: str,
+    container_runtime: str,
+    apptainer_image: str | None,
+) -> dict[str, object]:
+    metadata_out: dict[str, object] = {
+        "fortran_image": fortran_image,
+        "container_runtime": container_runtime,
+        "apptainer_image": apptainer_image,
+    }
+    if container_runtime == "docker" and shutil.which("docker") is not None:
+        proc = _run_capture(
+            [
+                "docker",
+                "image",
+                "inspect",
+                fortran_image,
+            ],
+            timeout=10,
+        )
+        if proc is not None:
+            metadata_out["docker_image_inspect_returncode"] = proc.returncode
+            if proc.returncode == 0:
+                try:
+                    inspect = json.loads(proc.stdout)
+                except json.JSONDecodeError:
+                    inspect = None
+                if inspect:
+                    first = inspect[0]
+                    metadata_out["docker_id"] = first.get("Id")
+                    metadata_out["docker_repo_digests"] = first.get("RepoDigests")
+                    metadata_out["docker_repo_tags"] = first.get("RepoTags")
+                    metadata_out["docker_created"] = first.get("Created")
+                    metadata_out["docker_labels"] = (first.get("Config") or {}).get("Labels")
+
+    image_ref = apptainer_image
+    if container_runtime == "apptainer":
+        image_ref = apptainer_image or f"docker://{fortran_image}"
+    if image_ref:
+        expanded = Path(image_ref).expanduser()
+        if expanded.exists():
+            resolved = expanded.resolve()
+            metadata_out["apptainer_image_resolved"] = str(resolved)
+            metadata_out["apptainer_image_sha256"] = _sha256_file(resolved)
+        if shutil.which("apptainer") is not None:
+            proc = _run_capture(["apptainer", "inspect", "--json", image_ref], timeout=10)
+            if proc is not None:
+                metadata_out["apptainer_inspect_returncode"] = proc.returncode
+                if proc.returncode == 0:
+                    try:
+                        metadata_out["apptainer_inspect"] = json.loads(proc.stdout)
+                    except json.JSONDecodeError:
+                        metadata_out["apptainer_inspect_stdout"] = proc.stdout.strip()
+    return metadata_out
 
 
 def _get_slurm_env() -> dict[str, str | None]:

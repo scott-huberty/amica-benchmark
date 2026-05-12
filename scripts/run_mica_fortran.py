@@ -13,7 +13,12 @@ import numpy as np
 
 from amica.utils.fortran import write_data, write_param_file
 
-from mica_common import count_ll_iterations, collect_environment_metadata, load_eeglab_set
+from mica_common import (
+    collect_environment_metadata,
+    collect_fortran_software_metadata,
+    count_ll_iterations,
+    load_eeglab_set,
+)
 
 
 DEFAULT_BENCH_ROOT = Path(__file__).resolve().parents[1] / "benchmark_runs"
@@ -143,6 +148,13 @@ def run_fortran(
         "fortran_image": fortran_image,
         "container_runtime": container_runtime,
         "apptainer_image": apptainer_image,
+        "software": {
+            "fortran": collect_fortran_software_metadata(
+                fortran_image=fortran_image,
+                container_runtime=container_runtime,
+                apptainer_image=apptainer_image,
+            ),
+        },
         "fortran_threads": int(fortran_threads),
         "environment": collect_environment_metadata(),
         "fit_started_at_epoch_seconds": float(fit_started_at_epoch_seconds),

@@ -17,6 +17,7 @@ from amica import AMICA
 from amica.utils.fortran import load_fortran_results, load_initial_weights
 
 from mica_common import (
+    collect_amica_python_metadata,
     clean_ll,
     collect_environment_metadata,
     discover_fortran_out,
@@ -424,6 +425,9 @@ def main() -> None:
         "device": args.device,
         "optimizer": "daarem",
         "python_threads": int(args.python_threads),
+        "software": {
+            "amica_python": collect_amica_python_metadata(),
+        },
         "environment": collect_environment_metadata(),
         "n_configs": len(configs),
         "n_fits": len(rows),
