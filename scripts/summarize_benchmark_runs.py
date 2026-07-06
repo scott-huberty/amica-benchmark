@@ -182,12 +182,126 @@ def _summarize_pair(
     return record
 
 
+def _env_summary(manifest: dict[str, object]) -> dict[str, object]:
+    env = manifest.get("environment", {}) or {}
+    if not isinstance(env, dict):
+        env = {}
+    slurm = env.get("slurm", {}) or {}
+    if not isinstance(slurm, dict):
+        slurm = {}
+    return {
+        "node": env.get("node_name") or env.get("hostname"),
+        "cpuset": env.get("cpus_allowed_list"),
+        "slurm_job_id": slurm.get("SLURM_JOB_ID"),
+    }
+
+
+def _read_fortran_ll(fortran_dir: Path, shape_manifest: dict[str, object]) -> np.ndarray:
+    n_components = int(shape_manifest["n_components"])
+    n_mixtures = int(shape_manifest["n_mixtures"])
+    n_features = int(shape_manifest["data_shape_samples_features"][1])
+    return _clean_ll(
+        load_fortran_results(
+            fortran_dir / "fortran_out",
+            n_components=n_components,
+            n_mixtures=n_mixtures,
+            n_features=n_features,
+        )["LL"]
+    )
+
+
+def _summarize_triplet_dataset(dataset_dir: Path) -> dict[str, object]:
+    dataset_name = dataset_dir.name
+    fortran_dir = dataset_dir / "fortran"
+    em_dir = dataset_dir / "python_em"
+    daarem_dir = dataset_dir / "python_daarem"
+
+    fortran_manifest = _read_json(fortran_dir / "fortran_run.json")
+    em_manifest = _read_json(em_dir / "python_run.json")
+    daarem_manifest = _read_json(daarem_dir / "python_run.json")
+
+    fortran_ll = _read_fortran_ll(fortran_dir, em_manifest)
+    fortran_curve = _curve_metrics(fortran_ll)
+    em_ll = _clean_ll(np.load(em_dir / "python_results.npz")["ll"])
+    daarem_ll = _clean_ll(np.load(daarem_dir / "python_results.npz")["ll"])
+    em_curve = _curve_metrics(em_ll)
+    daarem_curve = _curve_metrics(daarem_ll)
+
+    fortran_env = _env_summary(fortran_manifest)
+    em_env = _env_summary(em_manifest)
+    daarem_env = _env_summary(daarem_manifest)
+    same_job = (
+        fortran_env["slurm_job_id"]
+        == em_env["slurm_job_id"]
+        == daarem_env["slurm_job_id"]
+    )
+    same_node = fortran_env["node"] == em_env["node"] == daarem_env["node"]
+    same_cpuset = fortran_env["cpuset"] == em_env["cpuset"] == daarem_env["cpuset"]
+
+    fortran_fit_seconds = float(fortran_manifest["fit_seconds"])
+    em_fit_seconds = float(em_manifest["fit_seconds"])
+    daarem_fit_seconds = float(daarem_manifest["fit_seconds"])
+    fortran_final_ll = float(em_manifest.get("fortran_ll_final", fortran_curve.ll_final))
+    em_final_ll = float(em_manifest.get("python_ll_final", em_curve.ll_final))
+    daarem_final_ll = float(daarem_manifest.get("python_ll_final", daarem_curve.ll_final))
+
+    return {
+        "dataset": dataset_name,
+        "n_samples": int(em_manifest["data_shape_samples_features"][0]),
+        "n_features": int(em_manifest["data_shape_samples_features"][1]),
+        "n_components": int(em_manifest["n_components"]),
+        "n_mixtures": int(em_manifest["n_mixtures"]),
+        "fortran_final_ll": fortran_final_ll,
+        "em_final_ll": em_final_ll,
+        "daarem_final_ll": daarem_final_ll,
+        "fortran_n_iter": int(fortran_manifest.get("fortran_n_iter") or fortran_curve.n_iter),
+        "em_n_iter": int(em_manifest.get("python_n_iter") or em_curve.n_iter),
+        "daarem_n_iter": int(daarem_manifest.get("python_n_iter") or daarem_curve.n_iter),
+        "fortran_fit_seconds": fortran_fit_seconds,
+        "em_fit_seconds": em_fit_seconds,
+        "daarem_fit_seconds": daarem_fit_seconds,
+        "em_fortran_seconds_ratio": em_fit_seconds / fortran_fit_seconds,
+        "daarem_fortran_seconds_ratio": daarem_fit_seconds / fortran_fit_seconds,
+        "daarem_em_seconds_ratio": daarem_fit_seconds / em_fit_seconds,
+        "em_minus_fortran_ll": em_final_ll - fortran_final_ll,
+        "daarem_minus_fortran_ll": daarem_final_ll - fortran_final_ll,
+        "daarem_minus_em_ll": daarem_final_ll - em_final_ll,
+        "same_slurm_job_id": bool(same_job),
+        "same_node": bool(same_node),
+        "same_cpuset": bool(same_cpuset),
+        "node": fortran_env["node"],
+        "cpuset": fortran_env["cpuset"],
+        "slurm_job_id": fortran_env["slurm_job_id"],
+        "fortran_manifest": str(fortran_dir / "fortran_run.json"),
+        "em_manifest": str(em_dir / "python_run.json"),
+        "daarem_manifest": str(daarem_dir / "python_run.json"),
+    }
+
+
 def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
-    ax.scatter(df["fortran_final_ll"], df["python_final_ll"], s=50, color="#5472E4")
+    if "em_final_ll" in df.columns:
+        ax.scatter(df["fortran_final_ll"], df["em_final_ll"], s=50, color="#5472E4", label="EM")
+        ax.scatter(
+            df["fortran_final_ll"],
+            df["daarem_final_ll"],
+            s=50,
+            color="#D66A2C",
+            marker="^",
+            label="DAAREM",
+        )
+        y_col = "em_final_ll"
+        y_label = "AMICA-Python final LL"
+    else:
+        ax.scatter(df["fortran_final_ll"], df["python_final_ll"], s=50, color="#5472E4")
+        y_col = "python_final_ll"
+        y_label = "Python final LL"
     for row in df.itertuples(index=False):
-        ax.annotate(row.dataset, (row.fortran_final_ll, row.python_final_ll), xytext=(4, 4), textcoords="offset points")
-    finite = np.r_[df["fortran_final_ll"].to_numpy(), df["python_final_ll"].to_numpy()]
+        ax.annotate(row.dataset, (row.fortran_final_ll, getattr(row, y_col)), xytext=(4, 4), textcoords="offset points")
+    ll_cols = ["fortran_final_ll", y_col]
+    if "daarem_final_ll" in df.columns:
+        ll_cols.append("daarem_final_ll")
+    finite = np.concatenate([df[col].to_numpy() for col in ll_cols])
     lo = float(np.min(finite))
     hi = float(np.max(finite))
     pad = 0.05 * (hi - lo if hi > lo else 1.0)
@@ -195,8 +309,10 @@ def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
     ax.set_xlim(lo - pad, hi + pad)
     ax.set_ylim(lo - pad, hi + pad)
     ax.set_xlabel("Fortran final LL")
-    ax.set_ylabel("Python final LL")
+    ax.set_ylabel(y_label)
     ax.set_title("Final Log-Likelihood Parity")
+    if "em_final_ll" in df.columns:
+        ax.legend(frameon=False)
     ax.grid(True, alpha=0.25)
     fig.savefig(out_path, dpi=300)
     fig.savefig(out_path.with_suffix(".pdf"))
@@ -205,18 +321,41 @@ def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def _plot_ll_delta(df: pd.DataFrame, out_path: Path) -> None:
-    plot_df = df.sort_values("python_minus_fortran_ll")
-    colors = np.where(
-        plot_df["abs_python_minus_fortran_ll"] > 1e-2,
-        "#d62728",
-        "#2ca02c",
-    )
     fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
-    ax.bar(plot_df["dataset"], plot_df["python_minus_fortran_ll"], color=colors)
+    if "em_minus_fortran_ll" in df.columns:
+        plot_df = df.sort_values("daarem_minus_em_ll")
+        x = np.arange(len(plot_df))
+        width = 0.36
+        ax.bar(
+            x - width / 2,
+            plot_df["em_minus_fortran_ll"],
+            width=width,
+            color="#5472E4",
+            label="EM - Fortran",
+        )
+        ax.bar(
+            x + width / 2,
+            plot_df["daarem_minus_em_ll"],
+            width=width,
+            color="#D66A2C",
+            label="DAAREM - EM",
+        )
+        ax.set_xticks(x)
+        ax.set_xticklabels(plot_df["dataset"], rotation=45)
+        ax.set_ylabel("Final LL difference")
+        ax.legend(frameon=False)
+    else:
+        plot_df = df.sort_values("python_minus_fortran_ll")
+        colors = np.where(
+            plot_df["abs_python_minus_fortran_ll"] > 1e-2,
+            "#d62728",
+            "#2ca02c",
+        )
+        ax.bar(plot_df["dataset"], plot_df["python_minus_fortran_ll"], color=colors)
+        ax.set_ylabel("Python - Fortran final LL")
+        ax.tick_params(axis="x", rotation=45)
     ax.axhline(0.0, color="0.3", linewidth=1)
-    ax.set_ylabel("Python - Fortran final LL")
     ax.set_title("Per-Dataset Final LL Difference")
-    ax.tick_params(axis="x", rotation=45)
     ax.grid(True, axis="y", alpha=0.25)
     fig.savefig(out_path, dpi=300)
     fig.savefig(out_path.with_suffix(".pdf"))
@@ -225,13 +364,25 @@ def _plot_ll_delta(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
-    plot_df = df.dropna(subset=["python_fit_seconds", "fortran_fit_seconds"]).copy()
-    plot_df = plot_df.sort_values("fortran_vs_python_speedup")
+    if "em_fit_seconds" in df.columns:
+        required_cols = ["fortran_fit_seconds", "em_fit_seconds", "daarem_fit_seconds"]
+        sort_col = "daarem_fortran_seconds_ratio"
+    else:
+        required_cols = ["python_fit_seconds", "fortran_fit_seconds"]
+        sort_col = "fortran_vs_python_speedup"
+    plot_df = df.dropna(subset=required_cols).copy()
+    plot_df = plot_df.sort_values(sort_col)
     fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     x = np.arange(len(plot_df))
-    width = 0.42
-    ax.bar(x - width / 2, plot_df["fortran_fit_seconds"], width=width, label="Fortran (sec)", color="#454843")
-    ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#7D66D9")
+    if "em_fit_seconds" in df.columns:
+        width = 0.28
+        ax.bar(x - width, plot_df["fortran_fit_seconds"], width=width, label="Fortran", color="#454843")
+        ax.bar(x, plot_df["em_fit_seconds"], width=width, label="AMICA-Python EM", color="#5472E4")
+        ax.bar(x + width, plot_df["daarem_fit_seconds"], width=width, label="AMICA-Python DAAREM", color="#D66A2C")
+    else:
+        width = 0.42
+        ax.bar(x - width / 2, plot_df["fortran_fit_seconds"], width=width, label="Fortran (sec)", color="#454843")
+        ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#7D66D9")
     ax.set_xticks(x)
     ax.set_xticklabels(plot_df["dataset"], rotation=45)
     ax.set_ylabel("Wall time (seconds)")
@@ -276,7 +427,82 @@ def _plot_convergence_examples(
     plt.close(fig)
 
 
+def _plot_triplet_convergence_examples(
+    *,
+    df: pd.DataFrame,
+    triplet_batch_dir: Path,
+    out_path: Path,
+) -> None:
+    subjects = list(df.sort_values("daarem_minus_em_ll")["dataset"].head(4))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=False, sharey=False)
+    for ax, dataset in zip(axes.flat, subjects):
+        dataset_dir = triplet_batch_dir / dataset
+        ft_ll = _clean_ll(
+            load_fortran_results(
+                dataset_dir / "fortran" / "fortran_out",
+                n_components=int(df.loc[df["dataset"] == dataset, "n_components"].iloc[0]),
+                n_mixtures=int(df.loc[df["dataset"] == dataset, "n_mixtures"].iloc[0]),
+                n_features=int(df.loc[df["dataset"] == dataset, "n_features"].iloc[0]),
+            )["LL"]
+        )
+        em_ll = _clean_ll(np.load(dataset_dir / "python_em" / "python_results.npz")["ll"])
+        daarem_ll = _clean_ll(np.load(dataset_dir / "python_daarem" / "python_results.npz")["ll"])
+        ax.plot(np.arange(1, ft_ll.size + 1), ft_ll, label="Fortran", color="#454843")
+        ax.plot(np.arange(1, em_ll.size + 1), em_ll, label="EM", color="#5472E4")
+        ax.plot(np.arange(1, daarem_ll.size + 1), daarem_ll, label="DAAREM", color="#D66A2C")
+        ax.set_title(dataset)
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("LL")
+        ax.grid(True, alpha=0.25)
+    axes[0, 0].legend(frameon=False)
+    fig.suptitle("Convergence Curves: Largest DAAREM Final-LL Drifts", y=1.02)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _make_markdown(df: pd.DataFrame, aggregate: dict[str, object]) -> str:
+    if "em_final_ll" in df.columns:
+        display_cols = [
+            "dataset",
+            "fortran_n_iter",
+            "em_n_iter",
+            "daarem_n_iter",
+            "fortran_fit_seconds",
+            "em_fit_seconds",
+            "daarem_fit_seconds",
+            "em_fortran_seconds_ratio",
+            "daarem_fortran_seconds_ratio",
+            "daarem_em_seconds_ratio",
+            "em_minus_fortran_ll",
+            "daarem_minus_em_ll",
+            "same_slurm_job_id",
+            "same_node",
+            "same_cpuset",
+        ]
+        table = (
+            df.sort_values("daarem_minus_em_ll")[display_cols]
+            .round(6)
+            .to_markdown(index=False)
+        )
+        lines = [
+            "# Triplet Benchmark Summary",
+            "",
+            f"- Datasets compared: {aggregate['n_datasets']}",
+            f"- Same SLURM job: {aggregate['same_slurm_job_id_count']}/{aggregate['n_datasets']}",
+            f"- Same node: {aggregate['same_node_count']}/{aggregate['n_datasets']}",
+            f"- Same cpuset: {aggregate['same_cpuset_count']}/{aggregate['n_datasets']}",
+            f"- Median EM/Fortran wall-time ratio: {aggregate['median_em_fortran_seconds_ratio']:.3f}",
+            f"- Median DAAREM/Fortran wall-time ratio: {aggregate['median_daarem_fortran_seconds_ratio']:.3f}",
+            f"- Median DAAREM/EM wall-time ratio: {aggregate['median_daarem_em_seconds_ratio']:.3f}",
+            f"- Median EM - Fortran final LL: {aggregate['median_em_minus_fortran_ll']:.6g}",
+            f"- Median DAAREM - EM final LL: {aggregate['median_daarem_minus_em_ll']:.6g}",
+            f"- DAAREM below EM by >1e-4: {aggregate['daarem_below_em_gt_1e_4_count']}/{aggregate['n_datasets']}",
+            f"- DAAREM below EM by >1e-3: {aggregate['daarem_below_em_gt_1e_3_count']}/{aggregate['n_datasets']}",
+        ]
+        lines.extend(["", table, ""])
+        return "\n".join(lines)
+
     display_cols = [
         "dataset",
         "fortran_final_ll",
@@ -317,14 +543,111 @@ def _make_markdown(df: pd.DataFrame, aggregate: dict[str, object]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Summarize paired AMICA Python vs Fortran benchmark batches."
+        description="Summarize AMICA Python vs Fortran benchmark batches."
     )
-    parser.add_argument("--fortran-batch-dir", type=Path, required=True)
-    parser.add_argument("--python-batch-dir", type=Path, required=True)
+    parser.add_argument("--triplet-batch-dir", type=Path, default=None)
+    parser.add_argument("--fortran-batch-dir", type=Path, default=None)
+    parser.add_argument("--python-batch-dir", type=Path, default=None)
     parser.add_argument("--datasets-dir", type=Path, default=DEFAULT_DATASETS_DIR)
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--skip-source-corr", action="store_true")
     args = parser.parse_args()
+
+    if args.triplet_batch_dir is not None:
+        if args.fortran_batch_dir is not None or args.python_batch_dir is not None:
+            parser.error("--triplet-batch-dir cannot be combined with separate batch dirs.")
+        triplet_batch_dir = args.triplet_batch_dir.expanduser().resolve()
+        output_dir = (
+            args.output_dir.expanduser().resolve()
+            if args.output_dir is not None
+            else triplet_batch_dir / "summary_outputs"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dataset_dirs = sorted(
+            p
+            for p in triplet_batch_dir.iterdir()
+            if p.is_dir()
+            and (p / "fortran" / "fortran_run.json").exists()
+            and (p / "python_em" / "python_run.json").exists()
+            and (p / "python_daarem" / "python_run.json").exists()
+        )
+        if not dataset_dirs:
+            raise FileNotFoundError("No triplet dataset directories were found.")
+
+        rows: list[dict[str, object]] = []
+        for dataset_dir in dataset_dirs:
+            print(f"Summarizing {dataset_dir.name}...", file=sys.stderr)
+            rows.append(_summarize_triplet_dataset(dataset_dir))
+
+        df = pd.DataFrame(rows).sort_values("dataset").reset_index(drop=True)
+        unpaired_df = df[
+            ~(df["same_slurm_job_id"] & df["same_node"] & df["same_cpuset"])
+        ]
+        if not unpaired_df.empty:
+            failed = ", ".join(unpaired_df["dataset"].astype(str))
+            print(
+                f"WARNING: triplet pairing check failed for {len(unpaired_df)} dataset(s): {failed}",
+                file=sys.stderr,
+            )
+
+        aggregate: dict[str, object] = {
+            "triplet_batch_dir": str(triplet_batch_dir),
+            "n_datasets": int(len(df)),
+            "same_slurm_job_id_count": int(df["same_slurm_job_id"].sum()),
+            "same_node_count": int(df["same_node"].sum()),
+            "same_cpuset_count": int(df["same_cpuset"].sum()),
+            "median_em_fortran_seconds_ratio": float(df["em_fortran_seconds_ratio"].median()),
+            "mean_em_fortran_seconds_ratio": float(df["em_fortran_seconds_ratio"].mean()),
+            "median_daarem_fortran_seconds_ratio": float(df["daarem_fortran_seconds_ratio"].median()),
+            "mean_daarem_fortran_seconds_ratio": float(df["daarem_fortran_seconds_ratio"].mean()),
+            "median_daarem_em_seconds_ratio": float(df["daarem_em_seconds_ratio"].median()),
+            "mean_daarem_em_seconds_ratio": float(df["daarem_em_seconds_ratio"].mean()),
+            "em_faster_than_fortran_count": int((df["em_fortran_seconds_ratio"] < 1.0).sum()),
+            "daarem_faster_than_fortran_count": int((df["daarem_fortran_seconds_ratio"] < 1.0).sum()),
+            "daarem_faster_than_em_count": int((df["daarem_em_seconds_ratio"] < 1.0).sum()),
+            "daarem_fewer_iter_than_em_count": int((df["daarem_n_iter"] < df["em_n_iter"]).sum()),
+            "median_em_minus_fortran_ll": float(df["em_minus_fortran_ll"].median()),
+            "median_daarem_minus_fortran_ll": float(df["daarem_minus_fortran_ll"].median()),
+            "median_daarem_minus_em_ll": float(df["daarem_minus_em_ll"].median()),
+            "em_below_fortran_gt_1e_4_count": int((df["em_minus_fortran_ll"] < -1e-4).sum()),
+            "daarem_below_em_gt_1e_4_count": int((df["daarem_minus_em_ll"] < -1e-4).sum()),
+            "daarem_below_em_gt_1e_3_count": int((df["daarem_minus_em_ll"] < -1e-3).sum()),
+        }
+
+        csv_path = output_dir / "benchmark_summary.csv"
+        json_path = output_dir / "benchmark_summary.json"
+        md_path = output_dir / "benchmark_summary.md"
+        parity_png = output_dir / "final_ll_parity.png"
+        delta_png = output_dir / "final_ll_delta.png"
+        conv_png = output_dir / "convergence_examples.png"
+        timing_png = output_dir / "runtime_comparison.png"
+
+        df.to_csv(csv_path, index=False)
+        json_path.write_text(
+            json.dumps(
+                {
+                    "aggregate": aggregate,
+                    "datasets": df.to_dict(orient="records"),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        md_path.write_text(_make_markdown(df, aggregate) + "\n")
+        _plot_ll_parity(df, parity_png)
+        _plot_ll_delta(df, delta_png)
+        _plot_triplet_convergence_examples(
+            df=df,
+            triplet_batch_dir=triplet_batch_dir,
+            out_path=conv_png,
+        )
+        _plot_runtime_comparison(df, timing_png)
+
+        print(json.dumps({"aggregate": aggregate, "output_dir": str(output_dir)}, indent=2))
+        return
+
+    if args.fortran_batch_dir is None or args.python_batch_dir is None:
+        parser.error("Provide either --triplet-batch-dir or both --fortran-batch-dir and --python-batch-dir.")
 
     fortran_batch_dir = args.fortran_batch_dir.expanduser().resolve()
     python_batch_dir = args.python_batch_dir.expanduser().resolve()

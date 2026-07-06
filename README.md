@@ -410,3 +410,11 @@ Summarize a completed Fortran/Python benchmark pair:
   --fortran-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_fortran_slurm_20260419_164625 \
   --python-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_python_slurm_20260419_174859
 ```
+
+Summarize a paired triplet benchmark with Fortran, AMICA-Python EM, and
+AMICA-Python DAAREM runs from the same SLURM allocation:
+
+```bash
+/Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
+  --triplet-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_triplet_golden_20260511_232913
+```
