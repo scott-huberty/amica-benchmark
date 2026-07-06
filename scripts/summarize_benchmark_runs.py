@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import sys
@@ -278,6 +279,69 @@ def _summarize_triplet_dataset(dataset_dir: Path) -> dict[str, object]:
     }
 
 
+def _triplet_dataset_dirs(triplet_batch_dir: Path) -> list[Path]:
+    return sorted(
+        p
+        for p in triplet_batch_dir.iterdir()
+        if p.is_dir()
+        and (p / "fortran" / "fortran_run.json").exists()
+        and (p / "python_em" / "python_run.json").exists()
+        and (p / "python_daarem" / "python_run.json").exists()
+    )
+
+
+def _summarize_triplet_batch(triplet_batch_dir: Path) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for dataset_dir in _triplet_dataset_dirs(triplet_batch_dir):
+        print(f"Summarizing {triplet_batch_dir.name}/{dataset_dir.name}...", file=sys.stderr)
+        row = _summarize_triplet_dataset(dataset_dir)
+        row["run"] = triplet_batch_dir.name
+        rows.append(row)
+    if not rows:
+        raise FileNotFoundError(f"No triplet dataset directories were found in {triplet_batch_dir}.")
+    return pd.DataFrame(rows)
+
+
+def _aggregate_triplet_runs(run_df: pd.DataFrame) -> pd.DataFrame:
+    mean_cols = [
+        "fortran_final_ll",
+        "em_final_ll",
+        "daarem_final_ll",
+        "fortran_n_iter",
+        "em_n_iter",
+        "daarem_n_iter",
+        "fortran_fit_seconds",
+        "em_fit_seconds",
+        "daarem_fit_seconds",
+        "em_fortran_seconds_ratio",
+        "daarem_fortran_seconds_ratio",
+        "daarem_em_seconds_ratio",
+        "em_minus_fortran_ll",
+        "daarem_minus_fortran_ll",
+        "daarem_minus_em_ll",
+    ]
+    static_cols = ["n_samples", "n_features", "n_components", "n_mixtures"]
+    bool_cols = ["same_slurm_job_id", "same_node", "same_cpuset"]
+
+    rows: list[dict[str, object]] = []
+    for dataset, group in run_df.groupby("dataset", sort=True):
+        row: dict[str, object] = {"dataset": dataset, "n_runs": int(group["run"].nunique())}
+        for col in static_cols:
+            row[col] = int(group[col].iloc[0])
+        for col in mean_cols:
+            row[col] = float(group[col].mean())
+        for col in ["fortran_fit_seconds", "em_fit_seconds", "daarem_fit_seconds"]:
+            row[f"{col}_min"] = float(group[col].min())
+            row[f"{col}_max"] = float(group[col].max())
+        for col in bool_cols:
+            row[col] = bool(group[col].all())
+        row["node"] = ",".join(sorted(str(v) for v in group["node"].dropna().unique()))
+        row["cpuset"] = ",".join(sorted(str(v) for v in group["cpuset"].dropna().unique()))
+        row["slurm_job_id"] = ",".join(sorted(str(v) for v in group["slurm_job_id"].dropna().unique()))
+        rows.append(row)
+    return pd.DataFrame(rows).sort_values("dataset").reset_index(drop=True)
+
+
 def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
     if "em_final_ll" in df.columns:
@@ -372,27 +436,67 @@ def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
         sort_col = "fortran_vs_python_speedup"
     plot_df = df.dropna(subset=required_cols).copy()
     plot_df = plot_df.sort_values(sort_col)
-    fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
     x = np.arange(len(plot_df))
     if "em_fit_seconds" in df.columns:
-        width = 0.28
-        ax.bar(x - width, plot_df["fortran_fit_seconds"], width=width, label="Fortran", color="#454843")
-        ax.bar(x, plot_df["em_fit_seconds"], width=width, label="AMICA-Python EM", color="#5472E4")
-        ax.bar(x + width, plot_df["daarem_fit_seconds"], width=width, label="AMICA-Python DAAREM", color="#D66A2C")
+        fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True, constrained_layout=True)
+        comparisons = [
+            (axes[0], "em_fit_seconds", "AMICA-Python EM", "#5472E4"),
+            (axes[1], "daarem_fit_seconds", "AMICA-Python DAAREM", "#D66A2C"),
+        ]
+        width = 0.38
+        for ax, python_col, python_label, python_color in comparisons:
+            fortran_yerr = _runtime_range_yerr(plot_df, "fortran_fit_seconds")
+            python_yerr = _runtime_range_yerr(plot_df, python_col)
+            ax.bar(
+                x - width / 2,
+                plot_df["fortran_fit_seconds"],
+                yerr=fortran_yerr,
+                capsize=3 if fortran_yerr is not None else 0,
+                width=width,
+                label="Fortran",
+                color="#454843",
+            )
+            ax.bar(
+                x + width / 2,
+                plot_df[python_col],
+                yerr=python_yerr,
+                capsize=3 if python_yerr is not None else 0,
+                width=width,
+                label=python_label,
+                color=python_color,
+            )
+            ax.set_ylabel("Wall time (seconds)")
+            ax.set_title(f"Fortran vs {python_label}")
+            ax.legend(frameon=False)
+            ax.grid(True, axis="y", alpha=0.25)
+        axes[-1].set_xticks(x)
+        axes[-1].set_xticklabels(plot_df["dataset"], rotation=45, ha="right")
+        fig.suptitle("Runtime Comparison")
     else:
+        fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
         width = 0.42
         ax.bar(x - width / 2, plot_df["fortran_fit_seconds"], width=width, label="Fortran (sec)", color="#454843")
         ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#7D66D9")
-    ax.set_xticks(x)
-    ax.set_xticklabels(plot_df["dataset"], rotation=45)
-    ax.set_ylabel("Wall time (seconds)")
-    ax.set_title("Runtime Comparison")
-    ax.legend(frameon=False)
-    ax.grid(True, axis="y", alpha=0.25)
+        ax.set_xticks(x)
+        ax.set_xticklabels(plot_df["dataset"], rotation=45)
+        ax.set_ylabel("Wall time (seconds)")
+        ax.set_title("Runtime Comparison")
+        ax.legend(frameon=False)
+        ax.grid(True, axis="y", alpha=0.25)
     fig.savefig(out_path, dpi=300)
     fig.savefig(out_path.with_suffix(".pdf"))
     fig.savefig(out_path.with_suffix(".svg"))
     plt.close(fig)
+
+
+def _runtime_range_yerr(df: pd.DataFrame, col: str) -> np.ndarray | None:
+    min_col = f"{col}_min"
+    max_col = f"{col}_max"
+    if min_col not in df.columns or max_col not in df.columns:
+        return None
+    lower = df[col].to_numpy(dtype=float) - df[min_col].to_numpy(dtype=float)
+    upper = df[max_col].to_numpy(dtype=float) - df[col].to_numpy(dtype=float)
+    return np.vstack([lower, upper])
 
 
 def _plot_convergence_examples(
@@ -546,12 +650,113 @@ def main() -> None:
         description="Summarize AMICA Python vs Fortran benchmark batches."
     )
     parser.add_argument("--triplet-batch-dir", type=Path, default=None)
+    parser.add_argument(
+        "--triplet-batch-glob",
+        default=None,
+        help="Glob for multiple triplet batch directories to average before plotting.",
+    )
     parser.add_argument("--fortran-batch-dir", type=Path, default=None)
     parser.add_argument("--python-batch-dir", type=Path, default=None)
     parser.add_argument("--datasets-dir", type=Path, default=DEFAULT_DATASETS_DIR)
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--skip-source-corr", action="store_true")
     args = parser.parse_args()
+
+    if args.triplet_batch_glob is not None:
+        if (
+            args.triplet_batch_dir is not None
+            or args.fortran_batch_dir is not None
+            or args.python_batch_dir is not None
+        ):
+            parser.error(
+                "--triplet-batch-glob cannot be combined with --triplet-batch-dir "
+                "or separate batch dirs."
+            )
+        triplet_batch_dirs = [
+            Path(p).expanduser().resolve()
+            for p in sorted(glob.glob(os.path.expanduser(args.triplet_batch_glob)))
+            if Path(p).is_dir()
+        ]
+        if not triplet_batch_dirs:
+            raise FileNotFoundError(f"No directories matched {args.triplet_batch_glob!r}.")
+        output_dir = (
+            args.output_dir.expanduser().resolve()
+            if args.output_dir is not None
+            else Path("results/benchmark_summary").resolve()
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        run_df = pd.concat(
+            [_summarize_triplet_batch(batch_dir) for batch_dir in triplet_batch_dirs],
+            ignore_index=True,
+        )
+        df = _aggregate_triplet_runs(run_df)
+        unpaired_df = run_df[
+            ~(run_df["same_slurm_job_id"] & run_df["same_node"] & run_df["same_cpuset"])
+        ]
+        if not unpaired_df.empty:
+            failed = ", ".join(
+                f"{row.run}/{row.dataset}" for row in unpaired_df.itertuples(index=False)
+            )
+            print(
+                f"WARNING: triplet pairing check failed for {len(unpaired_df)} run dataset(s): {failed}",
+                file=sys.stderr,
+            )
+
+        aggregate: dict[str, object] = {
+            "triplet_batch_dirs": [str(path) for path in triplet_batch_dirs],
+            "n_runs": int(len(triplet_batch_dirs)),
+            "n_datasets": int(len(df)),
+            "n_run_datasets": int(len(run_df)),
+            "same_slurm_job_id_count": int(df["same_slurm_job_id"].sum()),
+            "same_node_count": int(df["same_node"].sum()),
+            "same_cpuset_count": int(df["same_cpuset"].sum()),
+            "median_em_fortran_seconds_ratio": float(df["em_fortran_seconds_ratio"].median()),
+            "mean_em_fortran_seconds_ratio": float(df["em_fortran_seconds_ratio"].mean()),
+            "median_daarem_fortran_seconds_ratio": float(df["daarem_fortran_seconds_ratio"].median()),
+            "mean_daarem_fortran_seconds_ratio": float(df["daarem_fortran_seconds_ratio"].mean()),
+            "median_daarem_em_seconds_ratio": float(df["daarem_em_seconds_ratio"].median()),
+            "mean_daarem_em_seconds_ratio": float(df["daarem_em_seconds_ratio"].mean()),
+            "em_faster_than_fortran_count": int((df["em_fortran_seconds_ratio"] < 1.0).sum()),
+            "daarem_faster_than_fortran_count": int((df["daarem_fortran_seconds_ratio"] < 1.0).sum()),
+            "daarem_faster_than_em_count": int((df["daarem_em_seconds_ratio"] < 1.0).sum()),
+            "daarem_fewer_iter_than_em_count": int((df["daarem_n_iter"] < df["em_n_iter"]).sum()),
+            "median_em_minus_fortran_ll": float(df["em_minus_fortran_ll"].median()),
+            "median_daarem_minus_fortran_ll": float(df["daarem_minus_fortran_ll"].median()),
+            "median_daarem_minus_em_ll": float(df["daarem_minus_em_ll"].median()),
+            "em_below_fortran_gt_1e_4_count": int((df["em_minus_fortran_ll"] < -1e-4).sum()),
+            "daarem_below_em_gt_1e_4_count": int((df["daarem_minus_em_ll"] < -1e-4).sum()),
+            "daarem_below_em_gt_1e_3_count": int((df["daarem_minus_em_ll"] < -1e-3).sum()),
+        }
+
+        csv_path = output_dir / "benchmark_summary.csv"
+        run_csv_path = output_dir / "benchmark_summary_runs.csv"
+        json_path = output_dir / "benchmark_summary.json"
+        md_path = output_dir / "benchmark_summary.md"
+        parity_png = output_dir / "final_ll_parity.png"
+        delta_png = output_dir / "final_ll_delta.png"
+        timing_png = output_dir / "runtime_comparison.png"
+
+        df.to_csv(csv_path, index=False)
+        run_df.sort_values(["run", "dataset"]).to_csv(run_csv_path, index=False)
+        json_path.write_text(
+            json.dumps(
+                {
+                    "aggregate": aggregate,
+                    "datasets": df.to_dict(orient="records"),
+                    "run_datasets": run_df.sort_values(["run", "dataset"]).to_dict(orient="records"),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        md_path.write_text(_make_markdown(df, aggregate) + "\n")
+        _plot_ll_parity(df, parity_png)
+        _plot_ll_delta(df, delta_png)
+        _plot_runtime_comparison(df, timing_png)
+
+        print(json.dumps({"aggregate": aggregate, "output_dir": str(output_dir)}, indent=2))
+        return
 
     if args.triplet_batch_dir is not None:
         if args.fortran_batch_dir is not None or args.python_batch_dir is not None:
@@ -563,14 +768,7 @@ def main() -> None:
             else triplet_batch_dir / "summary_outputs"
         )
         output_dir.mkdir(parents=True, exist_ok=True)
-        dataset_dirs = sorted(
-            p
-            for p in triplet_batch_dir.iterdir()
-            if p.is_dir()
-            and (p / "fortran" / "fortran_run.json").exists()
-            and (p / "python_em" / "python_run.json").exists()
-            and (p / "python_daarem" / "python_run.json").exists()
-        )
+        dataset_dirs = _triplet_dataset_dirs(triplet_batch_dir)
         if not dataset_dirs:
             raise FileNotFoundError("No triplet dataset directories were found.")
 

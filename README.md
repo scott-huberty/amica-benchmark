@@ -418,3 +418,12 @@ AMICA-Python DAAREM runs from the same SLURM allocation:
 /Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
   --triplet-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_triplet_golden_20260511_232913
 ```
+
+Summarize repeated triplet benchmark runs by averaging each participant across
+runs and plotting the observed runtime range as error bars:
+
+```bash
+/Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
+  --triplet-batch-glob '/Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_all_run-?_*' \
+  --output-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/results/benchmark_summary
+```
