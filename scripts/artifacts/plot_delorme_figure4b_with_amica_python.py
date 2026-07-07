@@ -55,7 +55,7 @@ EXPECTED_ALGORITHM_NUMBERS = {
     "Py-EM": 48,
     "Py-DAAREM": 49,
 }
-
+ALGO_LABEL = {"Py-EM": "AMICA-Python", "Py-DAAREM": "AMICA-Python (DAAREM)"}
 
 @dataclass(frozen=True)
 class AlgorithmInfo:
@@ -339,7 +339,7 @@ def plot_rows(
         ax.text(
             float(row["mean_mir_kbits_s"]) + dx,
             float(row["rv_below_5_percent"]) + dy,
-            str(row["algorithm"]),
+            str(ALGO_LABEL.get(row["algorithm"], row["algorithm"])),
             fontsize=9,
             color=color,
         )
