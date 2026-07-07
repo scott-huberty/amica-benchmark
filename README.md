@@ -86,10 +86,10 @@ Note that depending on your HPC you may have to load apptainer via `LMOD` before
 ## Recompute Delorme MIR with AMICA-Python
 
 The reproducible MATLAB workflow prepares a working copy of the MICA release,
-patches that copy to add `AMICA-Python` as algorithm 48, exports saved
-AMICA-Python joblib fits into `icadecompositions/*.mat`, runs Delorme's
-original `mutualinfoalgo.m`, and summarizes MIR while excluding MATLAB dataset
-10 (`gv84`) from every algorithm.
+patches that copy to add `Py-EM` as algorithm 48 and `Py-DAAREM` as algorithm
+49, exports saved AMICA-Python joblib fits into `icadecompositions/*.mat`, runs
+Delorme's original `mutualinfoalgo.m`, and summarizes MIR while excluding
+MATLAB dataset 10 (`gv84`) from every algorithm.
 
 EEGLAB 11.0.3.1b is expected at `./matlab/eeglab11_0_3_1b`. If it is missing:
 
@@ -103,12 +103,13 @@ Prepare the MICA working copy and AMICA-Python decomposition files:
 make prepare-mica-amica-python \
   PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
   MICA_RELEASE_DIR=/Users/scotterik/amica_test_data/mica_release \
-  PYTHON_RUN_ROOT=./benchmark_runs/mica_release_python_slurm_20260419_174859
+  TRIPLET_RUN_DIR=./benchmark_runs/mica_release_all_run-1_20260703_115448
 ```
 
 
-This copies the mica release directoryto `benchmark_runs/mica_release_amica_python_matlab`,
-and patches to `mutualinfoalgo` to incluce a mat file of AMICA-Python results.
+This copies the MICA release directory to `benchmark_runs/mica_release_amica_python_matlab`,
+patches `mutualinfoalgo.m`, and exports `python_em` and `python_daarem`
+decompositions from the canonical triplet run.
 
 Run the MATLAB MIR script:
 
@@ -144,7 +145,7 @@ make matlab-dipfit-smoke \
 This runs `DATASET=1; ALGONUM=43; processdat` in the prepared working copy.
 Per `processdat.m`, MATLAB dataset 10 is `gv84`.
 
-To run DIPFIT for AMICA-Python only, excluding `gv84`:
+To run DIPFIT for the AMICA-Python decompositions:
 
 ```bash
 make matlab-dipfit-amica-python \
@@ -152,8 +153,8 @@ make matlab-dipfit-amica-python \
 ```
 
 This runs `run_amica_python_dipfit.m` in the prepared working copy. It writes
-updated AMICA-Python decomposition files for `ALGONUM=48` and saves a batch
-status file:
+updated decomposition files for `ALGONUM=48` (`Py-EM`) and `ALGONUM=49`
+(`Py-DAAREM`) and saves a batch status file:
 
 ```text
 benchmark_runs/mica_release_amica_python_matlab/amica_python_dipfit_batch_results.mat
@@ -161,7 +162,7 @@ benchmark_runs/mica_release_amica_python_matlab/amica_python_dipfit_batch_result
 
 After both `matlab-mutualinfo` and `matlab-dipfit-amica-python` have
 completed in the same prepared working copy, recreate Delorme Figure 4B and add
-AMICA-Python:
+the AMICA-Python points:
 
 ```bash
 make figure4b-amica-python \

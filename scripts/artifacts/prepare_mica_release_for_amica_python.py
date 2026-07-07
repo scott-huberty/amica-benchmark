@@ -16,6 +16,9 @@ DEFAULT_MICA_ROOT = Path("/Users/scotterik/amica_test_data/mica_release")
 DEFAULT_PYTHON_RUN_ROOT = (
     REPO_ROOT / "benchmark_runs" / "mica_release_python_slurm_20260419_174859"
 )
+DEFAULT_TRIPLET_RUN_DIR = (
+    REPO_ROOT / "benchmark_runs" / "mica_release_all_run-1_20260703_115448"
+)
 DEFAULT_WORKDIR = REPO_ROOT / "benchmark_runs" / "mica_release_amica_python_matlab"
 
 
@@ -49,7 +52,7 @@ def copy_or_link_mica_release(source: Path, dest: Path, *, force: bool) -> None:
 
 def patch_processdat(path: Path) -> None:
     text = path.read_text()
-    if "AMICA-Python" in text:
+    if "Py-EM" in text and "Py-DAAREM" in text:
         return
 
     anchor = (
@@ -57,22 +60,24 @@ def patch_processdat(path: Path) -> None:
         "allalgs(end).name = 'binica ext.';    allalgs(end).options = { 'extended' 1 };\n"
     )
     insert = (
-        "allalgs(end+1).algo = 'amica_python';  allalgs(end).speed = 0;     "
-        "allalgs(end).name = 'AMICA-Python'; allalgs(end).options = {  };\n"
+        "allalgs(end+1).algo = 'amica_python_em';      allalgs(end).speed = 0;     "
+        "allalgs(end).name = 'Py-EM'; allalgs(end).options = {  };\n"
+        "allalgs(end+1).algo = 'amica_python_daarem';  allalgs(end).speed = 0;     "
+        "allalgs(end).name = 'Py-DAAREM'; allalgs(end).options = {  };\n"
     )
     if anchor not in text:
         raise ValueError(f"Could not find processdat.m algorithm insertion anchor in {path}")
     text = text.replace(anchor, anchor + insert)
-    text = text.replace("%allalgs(48).", "%allalgs(49).")
+    text = text.replace("%allalgs(48).", "%allalgs(50).")
     path.write_text(text)
 
 
 def patch_mutualinfoalgo(path: Path) -> None:
     text = path.read_text()
-    if "'AMICA-Python'" not in text:
+    if "'Py-EM'" not in text or "'Py-DAAREM'" not in text:
         text = text.replace(
             "algorithms = {  'Amica' 'Ext. Infomax' 'Pearson' 'Infomax' ...",
-            "algorithms = {  'Amica' 'AMICA-Python' 'Ext. Infomax' 'Pearson' 'Infomax' ...",
+            "algorithms = {  'Amica' 'Py-EM' 'Py-DAAREM' 'Ext. Infomax' 'Pearson' 'Infomax' ...",
         )
 
     if not text.endswith("\n"):
@@ -122,6 +127,15 @@ def main() -> None:
     )
     parser.add_argument("--mica-root", type=Path, default=DEFAULT_MICA_ROOT)
     parser.add_argument("--python-run-root", type=Path, default=DEFAULT_PYTHON_RUN_ROOT)
+    parser.add_argument(
+        "--triplet-run-dir",
+        type=Path,
+        default=DEFAULT_TRIPLET_RUN_DIR,
+        help=(
+            "Canonical triplet run directory containing <dataset>/python_em and "
+            "<dataset>/python_daarem. Used unless --legacy-single-python is set."
+        ),
+    )
     parser.add_argument("--workdir", type=Path, default=DEFAULT_WORKDIR)
     parser.add_argument(
         "--eeglab-dir",
@@ -129,11 +143,17 @@ def main() -> None:
         default=REPO_ROOT / "matlab" / "eeglab11_0_3_1b",
         help="Validated for convenience; MATLAB command still needs this on path.",
     )
+    parser.add_argument(
+        "--legacy-single-python",
+        action="store_true",
+        help="Export one legacy AMICA-Python algorithm from --python-run-root.",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
     mica_root = args.mica_root.expanduser().resolve()
     python_run_root = args.python_run_root.expanduser().resolve()
+    triplet_run_dir = args.triplet_run_dir.expanduser().resolve()
     workdir = args.workdir.expanduser().resolve()
     validate_eeglab(args.eeglab_dir.expanduser().resolve())
 
@@ -142,17 +162,38 @@ def main() -> None:
     patch_mutualinfoalgo(workdir / "mutualinfoalgo.m")
     patch_plgndr(workdir / "dipfit1.02" / "copyprivate" / "plgndr.m")
     copy_artifact_matlab_scripts(workdir)
-    export_result = export_amica_python_to_mica_mat(
-        python_run_root=python_run_root,
-        out_dir=workdir / "icadecompositions",
-    )
+    if args.legacy_single_python:
+        export_result = {
+            "legacy_amica_python": export_amica_python_to_mica_mat(
+                python_run_root=python_run_root,
+                out_dir=workdir / "icadecompositions",
+            )
+        }
+    else:
+        export_result = {
+            "py_em": export_amica_python_to_mica_mat(
+                python_run_root=triplet_run_dir,
+                python_subdir="python_em",
+                out_dir=workdir / "icadecompositions",
+                algorithm_num=48,
+                algorithm_slug="amica_python_em",
+            ),
+            "py_daarem": export_amica_python_to_mica_mat(
+                python_run_root=triplet_run_dir,
+                python_subdir="python_daarem",
+                out_dir=workdir / "icadecompositions",
+                algorithm_num=49,
+                algorithm_slug="amica_python_daarem",
+            ),
+        }
 
     result = {
         "workdir": str(workdir),
         "mica_root": str(mica_root),
         "python_run_root": str(python_run_root),
+        "triplet_run_dir": str(triplet_run_dir),
         "eeglab_dir": str(args.eeglab_dir.expanduser().resolve()),
-        **export_result,
+        "exports": export_result,
     }
     print(json.dumps(result, indent=2))
 

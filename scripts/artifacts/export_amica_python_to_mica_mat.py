@@ -44,6 +44,7 @@ def export_amica_python_to_mica_mat(
     out_dir: Path,
     algorithm_num: int = 48,
     algorithm_slug: str = "amica_python",
+    python_subdir: str | None = None,
     excluded: set[str] | None = None,
 ) -> dict[str, list[str]]:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +57,11 @@ def export_amica_python_to_mica_mat(
             skipped.append(dataset)
             continue
 
-        model_path = python_run_root / dataset / "python_model.joblib"
+        dataset_dir = python_run_root / dataset
+        if python_subdir is not None:
+            dataset_dir = dataset_dir / python_subdir
+
+        model_path = dataset_dir / "python_model.joblib"
         if not model_path.exists():
             raise FileNotFoundError(model_path)
 
@@ -65,7 +70,7 @@ def export_amica_python_to_mica_mat(
         if w.shape != (71, 71):
             raise ValueError(f"{dataset}: expected W shape (71, 71), got {w.shape}")
 
-        manifest_path = python_run_root / dataset / "python_run.json"
+        manifest_path = dataset_dir / "python_run.json"
         timeelapsed = np.nan
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text())
@@ -117,6 +122,11 @@ def main() -> None:
     parser.add_argument("--algorithm-num", type=int, default=48)
     parser.add_argument("--algorithm-slug", default="amica_python")
     parser.add_argument(
+        "--python-subdir",
+        default=None,
+        help="Optional per-dataset subdirectory, e.g. python_em or python_daarem.",
+    )
+    parser.add_argument(
         "--exclude-dataset",
         action="append",
         default=None,
@@ -135,6 +145,7 @@ def main() -> None:
         out_dir=out_dir,
         algorithm_num=args.algorithm_num,
         algorithm_slug=args.algorithm_slug,
+        python_subdir=args.python_subdir,
         excluded=set(args.exclude_dataset or []),
     )
     print(json.dumps(result, indent=2))

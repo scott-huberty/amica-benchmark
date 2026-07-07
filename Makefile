@@ -16,6 +16,7 @@ MICA_PREPARED_DIR ?= $(BENCH_ROOT)/mica_release_amica_python_matlab
 EEGLAB_DIR ?= ./matlab/eeglab11_0_3_1b
 MATLAB_BIN ?= /Applications/MATLAB_R2023b.app/bin/matlab
 PYTHON_RUN_ROOT ?= $(BENCH_ROOT)/mica_release_python_slurm_20260419_174859
+TRIPLET_RUN_DIR ?= $(BENCH_ROOT)/mica_release_all_run-1_20260703_115448
 MATLAB_PLOTRESULTS_OUT ?= results/matlab_plotresults_original
 
 MATLAB_DATASET ?= 1
@@ -78,7 +79,7 @@ download-eeglab11:
 prepare-mica-amica-python:
 	$(PYTHON) scripts/artifacts/prepare_mica_release_for_amica_python.py \
 	  --mica-root $(MICA_RELEASE_DIR) \
-	  --python-run-root $(PYTHON_RUN_ROOT) \
+	  --triplet-run-dir $(TRIPLET_RUN_DIR) \
 	  --workdir $(MICA_PREPARED_DIR) \
 	  --eeglab-dir $(EEGLAB_DIR) \
 	  --force

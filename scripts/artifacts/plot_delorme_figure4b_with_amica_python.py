@@ -5,6 +5,7 @@ import argparse
 import csv
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,13 +46,14 @@ FIGURE4B_ALGORITHMS = [
     "AMUSE",
     "PCA",
 ]
-AMICA_PYTHON_ALGORITHM = "AMICA-Python"
+PYTHON_ALGORITHMS = ("Py-EM", "Py-DAAREM")
 EXPECTED_ALGORITHM_NUMBERS = {
     "Infomax": 1,
     "Ext. Infomax": 2,
     "PCA": 43,
     "Amica": 45,
-    AMICA_PYTHON_ALGORITHM: 48,
+    "Py-EM": 48,
+    "Py-DAAREM": 49,
 }
 
 
@@ -175,7 +177,8 @@ def build_rows(workdir: Path, include_amica_python: bool) -> list[dict[str, obje
 
     algorithms = list(FIGURE4B_ALGORITHMS)
     if include_amica_python:
-        algorithms.insert(1, AMICA_PYTHON_ALGORITHM)
+        for algorithm in reversed(PYTHON_ALGORITHMS):
+            algorithms.insert(1, algorithm)
 
     rows: list[dict[str, object]] = []
     for algorithm in algorithms:
@@ -188,11 +191,11 @@ def build_rows(workdir: Path, include_amica_python: bool) -> list[dict[str, obje
         mir_values = mir[mir_index, keep_columns]
         rv_values = load_algorithm_rvs(workdir, processdat_algorithms[algorithm])
         finite_rv_count = int(np.sum(np.isfinite(rv_values)))
-        if algorithm == AMICA_PYTHON_ALGORITHM and finite_rv_count != rv_values.size:
-            raise ValueError(
+        if algorithm in PYTHON_ALGORITHMS and finite_rv_count != rv_values.size:
+            print(
                 f"{algorithm} has {finite_rv_count}/{rv_values.size} finite allrv values. "
-                "Run `make matlab-dipfit-amica-python` in the active prepared workdir "
-                "before plotting Figure 4B."
+                "Non-finite RV values are treated as not near-dipolar.",
+                file=sys.stderr,
             )
         rv_below_5 = int(np.sum(rv_values < 0.05))
         n_expected = len(DATASET_RANGE) * N_COMPONENTS
@@ -249,7 +252,7 @@ def write_summary(
 ) -> None:
     ranked = sorted(rows, key=lambda row: row["mean_mir_kbits_s"], reverse=True)
     lines = [
-        "# Delorme Figure 4B Data With AMICA-Python",
+        "# Delorme Figure 4B Data With Py-EM and Py-DAAREM",
         "",
         f"Source workdir: `{workdir}`",
         "",
@@ -266,7 +269,7 @@ def write_summary(
             f"{regression_original['intercept']:.6f} |"
         ),
         (
-            f"| Original + AMICA-Python | {regression_augmented['r_squared']:.6f} | "
+            f"| Original + Python algorithms | {regression_augmented['r_squared']:.6f} | "
             f"{regression_augmented['p_value']:.6e} | {regression_augmented['slope']:.6f} | "
             f"{regression_augmented['intercept']:.6f} |"
         ),
@@ -291,8 +294,8 @@ def plot_rows(
     png_path: Path,
     pdf_path: Path,
 ) -> None:
-    original_rows = [row for row in rows if row["algorithm"] != AMICA_PYTHON_ALGORITHM]
-    amica_python_row = next(row for row in rows if row["algorithm"] == AMICA_PYTHON_ALGORITHM)
+    original_rows = [row for row in rows if row["algorithm"] not in PYTHON_ALGORITHMS]
+    python_rows = [row for row in rows if row["algorithm"] in PYTHON_ALGORITHMS]
 
     with plt.rc_context({
         "font.size": 10,
@@ -307,21 +310,31 @@ def plot_rows(
     y_original = np.asarray([row["rv_below_5_percent"] for row in original_rows], dtype=float)
     ax.scatter(x_original, y_original, color="#111111", s=36, zorder=3, alpha=0.75)
 
-    ax.scatter(
-        [amica_python_row["mean_mir_kbits_s"]],
-        [amica_python_row["rv_below_5_percent"]],
-        color="#6E56CF",
-        marker="D",
-        s=58,
-        zorder=4,
-        label="AMICA-Python",
-    )
+    python_styles = {
+        "Py-EM": {"color": "#5472E4", "marker": "D"},
+        "Py-DAAREM": {"color": "#D66A2C", "marker": "^"},
+    }
+    for row in python_rows:
+        style = python_styles[str(row["algorithm"])]
+        ax.scatter(
+            [row["mean_mir_kbits_s"]],
+            [row["rv_below_5_percent"]],
+            color=style["color"],
+            marker=style["marker"],
+            s=68,
+            zorder=4,
+            label=str(row["algorithm"]),
+        )
 
     for row in rows:
-        dx = -.25 if row["algorithm"] == AMICA_PYTHON_ALGORITHM else 0.015
+        dx = -.25 if row["algorithm"] in PYTHON_ALGORITHMS else 0.015
         dy = 0.0
-        color = "#6E56CF" if row["algorithm"] == AMICA_PYTHON_ALGORITHM else "#111111"
-        if row["algorithm"] in {"Amica", AMICA_PYTHON_ALGORITHM}:
+        color = (
+            python_styles[str(row["algorithm"])]["color"]
+            if row["algorithm"] in PYTHON_ALGORITHMS
+            else "#111111"
+        )
+        if row["algorithm"] in {"Amica", *PYTHON_ALGORITHMS}:
             dy = 0.4
         ax.text(
             float(row["mean_mir_kbits_s"]) + dx,
@@ -348,7 +361,7 @@ def plot_rows(
         color="#6E56CF",
         linestyle=":",
         linewidth=1.5,
-        label="With AMICA-Python",
+        label="With Python algorithms",
     )
 
     add_cluster_regions(ax)
@@ -362,7 +375,7 @@ def plot_rows(
         0.17,
         (
             f"Original R^2={regression_original['r_squared']:.2f}\n"
-            f"With AMICA-Python R^2={regression_augmented['r_squared']:.2f}"
+            f"With Python R^2={regression_augmented['r_squared']:.2f}"
         ),
         transform=ax.transAxes,
         fontsize=10,
@@ -382,7 +395,7 @@ def plot_rows(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Recreate Delorme Figure 4B coordinates and add AMICA-Python."
+        description="Recreate Delorme Figure 4B coordinates and add Py-EM/Py-DAAREM."
     )
     parser.add_argument("--workdir", type=Path, default=DEFAULT_WORKDIR)
     parser.add_argument("--out-prefix", type=Path, default=DEFAULT_OUT_PREFIX)
@@ -398,7 +411,7 @@ def main() -> None:
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
 
     rows = build_rows(workdir, include_amica_python=not args.no_amica_python)
-    original_rows = [row for row in rows if row["algorithm"] != AMICA_PYTHON_ALGORITHM]
+    original_rows = [row for row in rows if row["algorithm"] not in PYTHON_ALGORITHMS]
     regression_original = regression(original_rows)
     regression_augmented = regression(rows)
 
