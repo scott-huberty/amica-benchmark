@@ -323,7 +323,7 @@ def plot_rows(
             marker=style["marker"],
             s=68,
             zorder=4,
-            label=str(row["algorithm"]),
+            label=str(ALGO_LABEL.get(row["algorithm"], row["algorithm"])),
         )
 
     for row in rows:
