@@ -345,14 +345,20 @@ def _aggregate_triplet_runs(run_df: pd.DataFrame) -> pd.DataFrame:
 def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
     if "em_final_ll" in df.columns:
-        ax.scatter(df["fortran_final_ll"], df["em_final_ll"], s=50, color="#5472E4", label="EM")
+        ax.scatter(
+            df["fortran_final_ll"],
+            df["em_final_ll"],
+            s=50,
+            color="#5472E4",
+            label="AMICA-Python",
+        )
         ax.scatter(
             df["fortran_final_ll"],
             df["daarem_final_ll"],
             s=50,
             color="#D66A2C",
             marker="^",
-            label="DAAREM",
+            label="AMICA-Python (DAAREM)",
         )
         y_col = "em_final_ll"
         y_label = "AMICA-Python final LL"
@@ -440,8 +446,8 @@ def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
     if "em_fit_seconds" in df.columns:
         fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True, constrained_layout=True)
         comparisons = [
-            (axes[0], "em_fit_seconds", "AMICA-Python EM", "#5472E4"),
-            (axes[1], "daarem_fit_seconds", "AMICA-Python DAAREM", "#D66A2C"),
+            (axes[0], "em_fit_seconds", "AMICA-Python", "#5472E4"),
+            (axes[1], "daarem_fit_seconds", "AMICA-Python (DAAREM)", "#D66A2C"),
         ]
         width = 0.38
         for ax, python_col, python_label, python_color in comparisons:
