@@ -343,6 +343,11 @@ def _aggregate_triplet_runs(run_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
+    label_size = 13
+    tick_size = 11
+    title_size = 15
+    legend_size = 11
+
     fig, ax = plt.subplots(figsize=(7, 6), constrained_layout=True)
     if "em_final_ll" in df.columns:
         ax.scatter(
@@ -366,8 +371,6 @@ def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
         ax.scatter(df["fortran_final_ll"], df["python_final_ll"], s=50, color="#5472E4")
         y_col = "python_final_ll"
         y_label = "Python final LL"
-    for row in df.itertuples(index=False):
-        ax.annotate(row.dataset, (row.fortran_final_ll, getattr(row, y_col)), xytext=(4, 4), textcoords="offset points")
     ll_cols = ["fortran_final_ll", y_col]
     if "daarem_final_ll" in df.columns:
         ll_cols.append("daarem_final_ll")
@@ -378,11 +381,12 @@ def _plot_ll_parity(df: pd.DataFrame, out_path: Path) -> None:
     ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], linestyle="--", color="0.5")
     ax.set_xlim(lo - pad, hi + pad)
     ax.set_ylim(lo - pad, hi + pad)
-    ax.set_xlabel("Fortran final LL")
-    ax.set_ylabel(y_label)
-    ax.set_title("Final Log-Likelihood Parity")
+    ax.set_xlabel("Fortran final LL", fontsize=label_size)
+    ax.set_ylabel(y_label, fontsize=label_size)
+    ax.set_title("Final Log-Likelihood Parity", fontsize=title_size)
+    ax.tick_params(axis="both", labelsize=tick_size)
     if "em_final_ll" in df.columns:
-        ax.legend(frameon=False)
+        ax.legend(frameon=False, fontsize=legend_size)
     ax.grid(True, alpha=0.25)
     fig.savefig(out_path, dpi=300)
     fig.savefig(out_path.with_suffix(".pdf"))
@@ -434,6 +438,11 @@ def _plot_ll_delta(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
+    label_size = 13
+    tick_size = 11
+    title_size = 15
+    legend_size = 11
+
     if "em_fit_seconds" in df.columns:
         required_cols = ["fortran_fit_seconds", "em_fit_seconds", "daarem_fit_seconds"]
         sort_col = "daarem_fortran_seconds_ratio"
@@ -444,40 +453,31 @@ def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
     plot_df = plot_df.sort_values(sort_col)
     x = np.arange(len(plot_df))
     if "em_fit_seconds" in df.columns:
-        fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True, constrained_layout=True)
-        comparisons = [
-            (axes[0], "em_fit_seconds", "AMICA-Python", "#5472E4"),
-            (axes[1], "daarem_fit_seconds", "AMICA-Python (DAAREM)", "#D66A2C"),
+        fig, ax = plt.subplots(figsize=(12, 5.8), constrained_layout=True)
+        width = 0.26
+        series = [
+            ("fortran_fit_seconds", "Fortran", "#454843", -width),
+            ("em_fit_seconds", "AMICA-Python", "#5472E4", 0.0),
+            ("daarem_fit_seconds", "AMICA-Python (DAAREM)", "#D66A2C", width),
         ]
-        width = 0.38
-        for ax, python_col, python_label, python_color in comparisons:
-            fortran_yerr = _runtime_range_yerr(plot_df, "fortran_fit_seconds")
-            python_yerr = _runtime_range_yerr(plot_df, python_col)
+        for col, label, color, offset in series:
+            yerr = _runtime_range_yerr(plot_df, col)
             ax.bar(
-                x - width / 2,
-                plot_df["fortran_fit_seconds"],
-                yerr=fortran_yerr,
-                capsize=3 if fortran_yerr is not None else 0,
+                x + offset,
+                plot_df[col],
+                yerr=yerr,
+                capsize=3 if yerr is not None else 0,
                 width=width,
-                label="Fortran",
-                color="#454843",
+                label=label,
+                color=color,
             )
-            ax.bar(
-                x + width / 2,
-                plot_df[python_col],
-                yerr=python_yerr,
-                capsize=3 if python_yerr is not None else 0,
-                width=width,
-                label=python_label,
-                color=python_color,
-            )
-            ax.set_ylabel("Wall time (seconds)")
-            ax.set_title(f"Fortran vs {python_label}")
-            ax.legend(frameon=False)
-            ax.grid(True, axis="y", alpha=0.25)
-        axes[-1].set_xticks(x)
-        axes[-1].set_xticklabels(plot_df["dataset"], rotation=45, ha="right")
-        fig.suptitle("Runtime Comparison")
+        ax.set_xticks(x)
+        ax.set_xticklabels(plot_df["dataset"], rotation=45, ha="right")
+        ax.set_ylabel("Wall time (seconds)", fontsize=label_size)
+        ax.set_title("Runtime Comparison", fontsize=title_size)
+        ax.tick_params(axis="both", labelsize=tick_size)
+        ax.legend(frameon=False, ncol=3, fontsize=legend_size)
+        ax.grid(True, axis="y", alpha=0.25)
     else:
         fig, ax = plt.subplots(figsize=(10, 5), constrained_layout=True)
         width = 0.42
@@ -485,9 +485,10 @@ def _plot_runtime_comparison(df: pd.DataFrame, out_path: Path) -> None:
         ax.bar(x + width / 2, plot_df["python_fit_seconds"], width=width, label="Python (sec)", color="#7D66D9")
         ax.set_xticks(x)
         ax.set_xticklabels(plot_df["dataset"], rotation=45)
-        ax.set_ylabel("Wall time (seconds)")
-        ax.set_title("Runtime Comparison")
-        ax.legend(frameon=False)
+        ax.set_ylabel("Wall time (seconds)", fontsize=label_size)
+        ax.set_title("Runtime Comparison", fontsize=title_size)
+        ax.tick_params(axis="both", labelsize=tick_size)
+        ax.legend(frameon=False, fontsize=legend_size)
         ax.grid(True, axis="y", alpha=0.25)
     fig.savefig(out_path, dpi=300)
     fig.savefig(out_path.with_suffix(".pdf"))

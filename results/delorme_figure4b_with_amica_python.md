@@ -11,6 +11,23 @@ Reduction mirrors `plotresults.m`: datasets `[1:9, 11:14]`, `mir * 1.4427 * 250 
 | Original 18 algorithms | 0.964111 | 5.493123e-13 | 20.388759 | -852.098986 |
 | Original + Python algorithms | 0.961888 | 3.201771e-14 | 21.519381 | -899.968097 |
 
+## Per-recording AMICA comparisons
+
+| Method | MIR mean +/- SD (kbits/s) | RV < 5% mean +/- SD (%) |
+| --- | ---: | ---: |
+| Fortran AMICA | 43.132 +/- 7.405 | 30.01 +/- 12.55 |
+| AMICA-Python | 43.111 +/- 7.400 | 29.14 +/- 9.98 |
+| AMICA-Python (DAAREM) | 43.108 +/- 7.397 | 30.88 +/- 10.83 |
+
+| Paired comparison | Metric | Mean difference | t(df) | p-value |
+| --- | --- | ---: | ---: | ---: |
+| AMICA-Python - Fortran AMICA | MIR (kbits/s) | -0.021 | -2.49(12) | 0.0283 |
+| AMICA-Python - Fortran AMICA | RV < 5% (%) | -0.867 | -0.71(12) | 0.4911 |
+| AMICA-Python (DAAREM) - Fortran AMICA | MIR (kbits/s) | -0.024 | -2.85(12) | 0.0146 |
+| AMICA-Python (DAAREM) - Fortran AMICA | RV < 5% (%) | 0.867 | 0.65(12) | 0.5268 |
+| AMICA-Python (DAAREM) - AMICA-Python | MIR (kbits/s) | -0.003 | -2.22(12) | 0.0468 |
+| AMICA-Python (DAAREM) - AMICA-Python | RV < 5% (%) | 1.733 | 2.36(12) | 0.0358 |
+
 ## Coordinates
 
 | Rank by MIR | Algorithm | MIR (kbits/s) | RV < 5% components (%) | Count |
