@@ -120,7 +120,7 @@ dependencies:
   - zlib-ng=2.3.3=hceb46e0_1
   - zstd=1.5.7=hb78ec9c_6
   - pip:
-      - amica-python==0.1.1
+      - amica-python==0.1.2
       - joblib==1.5.3
       - loguru==0.7.3
       - markdown-it-py==4.0.0
@@ -130,4 +130,3 @@ dependencies:
       - rich==14.3.3
       - scikit-learn==1.8.0
       - threadpoolctl==3.6.0
-prefix: /home1/shuberty/.conda/envs/amica-benchmark

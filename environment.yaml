@@ -2,15 +2,15 @@ name: amica-benchmark
 channels:
   - conda-forge
 dependencies:
-  - python>=3.10
-  - numpy>=2
-  - scipy
-  - pandas
-  - matplotlib-base
-  - mne-base
-  - pooch>=1.8.2
-  - pytorch
-  - tabulate
-  - pip
+  - python=3.14
+  - numpy=2.4.3
+  - scipy=1.17
+  - scikit-learn=1.8.0
+  - matplotlib-base=3.10.8
+  - mne-base=1.11.0
+  - pooch=1.9.0
+  - pytorch=2.10.0
+  - rich=14.3.3
+  - pip=26.0.1
   - pip:
-      - amica-python @ git+https://github.com/scott-huberty/amica-python.git
+      - amica-python==0.1.2
