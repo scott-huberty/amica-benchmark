@@ -1,172 +1,190 @@
 # AMICA Benchmark
 
-Benchmark harness for comparing AMICA-Python against the Fortran AMICA Docker reference on open EEG data.
+Benchmark for comparing AMICA-Python against the Fortran AMICA Docker reference on open EEG data.
 
-## Setup
+## To run the benchmark.
 
-Choose one environment manager:
+Because the benchmark requires both computationally expensive steps (running ICA on
+an EEG dataset), and a varied stack (Python for ICA, and MATLAB for replicating results
+from a previous paper), this benchmark cannot be simply run with one CLI command. You
+will need to follow the steps below. Having access to an HPC would be advantageous if you
+wish to re-run ICA on the EEG dataset.
 
-```bash
-cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
-pixi install
+If you don't wish to rerun the benchmark (i.e. ICA on the dataset), you can skip to
+steps 5 or 7.
+
+### Instructions:
+
+Part of this process was run on an HPC (for the heavy dute computation), and the rest
+was done locally. Initially, I setup my environment on an HPC, the lockfile below
+contains the specifcation for that environment:
+
+1. Clone the repo Create and activate the conda environment.
+
+If you haven't already cloned the repo:
+
+```
+git clone https://github.com/scott-huberty/amica-benchmark.git
 ```
 
 ```bash
-cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
-uv sync
+cd amica-benchmark # if needed
+conda env create -f environment-linux.yaml
+conda activate amica-benchmark
 ```
 
+2. Download the benchmark dataset and retrieve the Fortran AMICA container.
+
 ```bash
-cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
+python scripts/download_dataset.py
+
+module load apptainer # If needed on your HPC
+./scripts/pull_fortran_image.sh shuberty/amica:latest ./amica.sif
+```
+
+3. Submit the benchmark jobs.
+
+The paper benchmark used a SLURM scheduler to submit one job per recording.
+Each job ran Fortran AMICA, AMICA-Python, and AMICA-Python (DAAREM acceleration) serially
+inside the same allocation, in order to ensure as fair a comparison as possible.
+
+I ran the command below 3 times, each time appending a different number (1,2,3) to the
+run tag:
+
+```bash
+python scripts/submit_mica_triplet_slurm.py \
+  --datasets-dir ~/amica_test_data/mica_release/datasets \
+  --dataset-glob '*.set' \
+  --bench-root ./benchmark_runs \
+  --run-tag mica_release_all_run-1 \
+  --threads 1 \
+  --partition epyc-64 \
+  --constraint epyc-7513 \
+  --max-iter 2000 \
+  --container-runtime apptainer \
+  --apptainer-image ./amica.sif \
+  --time 12:00:00 \
+  --mem 24G
+```
+
+Within each dataset directory, outputs are written to `fortran/`, `python_em/`,
+and `python_daarem/`.
+
+Note that I constrained the jobs to a specific architecture (`epyc-64`), which is specific
+to USC's HPC.
+
+4. Summarize the completed benchmark.
+
+Again, I ran the entire benchmark 3 separate times, and those results were averaged when
+reporting runtimes for the paper. I did this to reduce the risk that a single job was unusually
+slow due to factors outside my control (e.g. heavy use of the cluster at that moment).
+
+Use `--triplet-batch-glob` to aggregate the benchmark across runs, which is what I did
+to summarize the 3 completed runs of each implementation:
+
+```bash
+python scripts/summarize_benchmark_runs.py \
+  --triplet-batch-glob './benchmark_runs/mica_release_all_run-?_*' \
+  --output-dir ./results/benchmark_summary
+```
+
+5. Prepare copies of the scripts provided by Delorme 2012 (MIR/DIPFIT calculations).
+
+At this point I moved my working environment to my local computer, because I did not
+have MATLAB on my HPC. Again, I created my environment. You can use the same
+environment yaml as step 1, or if you are on a Mac or Windows, you can try the crossplatform
+environment file, like below:
+
+```bash
+cd amica-benchmark
 conda env create -f environment.yaml
 conda activate amica-benchmark
 ```
 
-## Common workflows
+Clone a copy of this repository if needed:
 
-Use whichever launcher matches your environment:
-
-```bash
-pixi run download-dataset
-uv run python scripts/download_dataset.py
+```
+git clone https://github.com/scott-huberty/amica-benchmark.git
 ```
 
-```bash
-pixi run benchmark-fortran-all
-uv run python scripts/run_mica_fortran_all.py
-```
+Download the benchmark dataset again if you switch from HPC to a local setup, as the
+scripts below will need them:
 
 ```bash
-pixi run benchmark-python-all
-uv run python scripts/run_mica_python_all.py
+python scripts/download_dataset.py
 ```
+
+And finally, if you ran the benchmark on an HPC, you should use a command like `rsync`,
+or `scp` to copy the 3 runs of the benchmark inside `amica-benchark/benchmark_runs/` on
+the HPC to the same location in your local copy of the `amica-benchmark` repository.
+
+The first script below will download a specific version of EEGLAB, a matlab toolbox, to
+your computer. It is needed to run some of the steps below.
+
+The second script below prepares a working copy of the scripts provided by Delorme et al., 2012.
+It patches that copy to add `Py-EM` as algorithm 48 and `Py-DAAREM` as algorithm
+49, exports saved AMICA-Python fits (from the joblib files saved by the benchmark) into
+`icadecompositions/*.mat`, runs Delorme's original `mutualinfoalgo.m`, and summarizes the
+Mutual Information Reduction.
 
 ```bash
-pixi run benchmark-fastica-picard-all
-uv run python scripts/run_mica_fastica_picard_all.py
+python scripts/artifacts/download_eeglab11.py \
+  --dest ./matlab/eeglab11_0_3_1b
+
+python scripts/artifacts/prepare_mica_release_for_amica_python.py \
+  --mica-root ~/amica_test_data/mica_release \
+  --triplet-run-dir ./benchmark_runs/mica_release_all_run-1_20260703_115448 \
+  --workdir ./benchmark_runs/mica_release_amica_python_matlab \
+  --eeglab-dir ./matlab/eeglab11_0_3_1b \
+  --force
 ```
+
+Note that for this portion of the benchmark, we simply chose the 1st run of the benchmark,
+as we only were concerned about averaging multiple runs of the benchmark when reporting
+runtime, which can vary depending on the load on the node being used.
+
+The command above outputs the artifacts to `benchmark_runs/mica_release_amica_python_matlab`.
+
+6. Calculate MIR and DIPFIT, then summarize the MIR table.
+
+You need to have MATLAB installed on your computer to run steps 6 and 7. I specifically
+used version 2023b:
 
 ```bash
-pixi run benchmark-slurm-fortran
-pixi run benchmark-slurm-python
-uv run python scripts/submit_mica_fortran_slurm.py
-uv run python scripts/submit_mica_python_slurm.py
+MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab # <<< Pass the path to your actual MATLAB executable
+EEGLAB_DIR="$(pwd)/matlab/eeglab11_0_3_1b"
+MICA_PREPARED_DIR="$(pwd)/benchmark_runs/mica_release_amica_python_matlab"
+"$MATLAB_BIN" -batch "addpath('$EEGLAB_DIR'); addpath('$MICA_PREPARED_DIR'); cd('$MICA_PREPARED_DIR'); mutualinfoalgo"
+
+"$MATLAB_BIN" -batch "addpath('$EEGLAB_DIR'); addpath('$MICA_PREPARED_DIR'); cd('$MICA_PREPARED_DIR'); run_amica_python_dipfit"
+
+python scripts/artifacts/summarize_mir_excluding_gv84.py \
+  --mir-mat ./benchmark_runs/mica_release_amica_python_matlab/mir_new.mat \
+  --out-prefix results/mir_summary_excluding_gv84
 ```
 
-Pass script options directly when needed:
-
-```bash
-pixi run benchmark-python-all -- --datasets-dir ~/amica_test_data/mica_release/datasets --fortran-search-root ./benchmark_runs --python-threads 4 --max-iter 1000
-uv run python scripts/run_mica_python_all.py --datasets-dir ~/amica_test_data/mica_release/datasets --fortran-search-root ./benchmark_runs --python-threads 4 --max-iter 1000
-```
-
-For single-subject runs, call the scripts directly:
-
-```bash
-python scripts/run_mica_fortran.py --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set
-python scripts/run_mica_python.py --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set
-python scripts/run_mica_fastica_picard.py --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set
-```
-
-## Fortran image
-
-```bash
-./scripts/pull_fortran_image.sh shuberty/amica:latest
-```
-
-For cluster / Apptainer workflows:
-
-```bash
-RUNTIME=apptainer ./scripts/pull_fortran_image.sh shuberty/amica:latest /path/to/save/your/containers/amica.sif
-```
-
-Note that depending on your HPC you may have to load apptainer via `LMOD` before running the above command, e.g. `module load apptainer`
-
-
-## Recompute Delorme MIR with AMICA-Python
-
-The reproducible MATLAB workflow prepares a working copy of the MICA release,
-patches that copy to add `Py-EM` as algorithm 48 and `Py-DAAREM` as algorithm
-49, exports saved AMICA-Python joblib fits into `icadecompositions/*.mat`, runs
-Delorme's original `mutualinfoalgo.m`, and summarizes MIR while excluding
-MATLAB dataset 10 (`gv84`) from every algorithm.
-
-EEGLAB 11.0.3.1b is expected at `./matlab/eeglab11_0_3_1b`. If it is missing:
-
-```bash
-make download-eeglab11
-```
-
-Prepare the MICA working copy and AMICA-Python decomposition files:
-
-```bash
-make prepare-mica-amica-python \
-  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
-  MICA_RELEASE_DIR=/Users/scotterik/amica_test_data/mica_release \
-  TRIPLET_RUN_DIR=./benchmark_runs/mica_release_all_run-1_20260703_115448
-```
-
-
-This copies the MICA release directory to `benchmark_runs/mica_release_amica_python_matlab`,
-patches `mutualinfoalgo.m`, and exports `python_em` and `python_daarem`
-decompositions from the canonical triplet run.
-
-Run the MATLAB MIR script:
-
-```bash
-make matlab-mutualinfo \
-  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab
-```
-
-Summarize the result excluding `gv84`:
-
-```bash
-make summarize-mir-no-gv84 \
-  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python
-```
-
-Outputs:
+The MIR summary writes:
 
 ```text
 results/mir_summary_excluding_gv84.csv
 results/mir_summary_excluding_gv84.md
 ```
 
-To smoke-test the original MATLAB/DIPFIT fitting path on one dataset and
-algorithm:
-
-```bash
-make matlab-dipfit-smoke \
-  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab \
-  MATLAB_DATASET=1 \
-  MATLAB_ALGONUM=43
-```
-
-This runs `DATASET=1; ALGONUM=43; processdat` in the prepared working copy.
-Per `processdat.m`, MATLAB dataset 10 is `gv84`.
-
-To run DIPFIT for the AMICA-Python decompositions:
-
-```bash
-make matlab-dipfit-amica-python \
-  MATLAB_BIN=/Applications/MATLAB_R2023b.app/bin/matlab
-```
-
-This runs `run_amica_python_dipfit.m` in the prepared working copy. It writes
-updated decomposition files for `ALGONUM=48` (`Py-EM`) and `ALGONUM=49`
-(`Py-DAAREM`) and saves a batch status file:
+The DIPFIT batch writes:
 
 ```text
 benchmark_runs/mica_release_amica_python_matlab/amica_python_dipfit_batch_results.mat
 ```
 
-After both `matlab-mutualinfo` and `matlab-dipfit-amica-python` have
-completed in the same prepared working copy, recreate Delorme Figure 4B and add
-the AMICA-Python points:
+7. Recreate Delorme Figure 4B with the AMICA-Python points.
+
+After both the MATLAB MIR and AMICA-Python DIPFIT commands have completed in
+the same prepared working copy, recreate Delorme Figure 4B:
 
 ```bash
-make figure4b-amica-python \
-  PYTHON=/Users/scotterik/miniforge3/envs/amica_env/bin/python
+python scripts/artifacts/plot_delorme_figure4b_with_amica_python.py \
+  --workdir ./benchmark_runs/mica_release_amica_python_matlab \
+  --out-prefix results/delorme_figure4b_with_amica_python
 ```
 
 Outputs:
@@ -178,253 +196,4 @@ results/delorme_figure4b_with_amica_python.png
 results/delorme_figure4b_with_amica_python.pdf
 ```
 
-## Single-dataset runners
-
-```bash
-python scripts/run_mica_fortran.py \
-  --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
-  --container-runtime docker \
-  --max-iter 1000 \
-  --fortran-threads 4
-```
-
-On clusters, use Apptainer:
-
-```bash
-python scripts/run_mica_fortran.py \
-  --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
-  --container-runtime apptainer \
-  --apptainer-image /shared/containers/amica.sif \
-  --max-iter 1000 \
-  --fortran-threads 4
-```
-
-```bash
-python scripts/run_mica_python.py \
-  --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
-  --fortran-search-root ./benchmark_runs \
-  --max-iter 1000 \
-  --python-threads 4
-```
-
-If `--fortran-out` is omitted, `run_mica_python.py` searches `--fortran-search-root` for a matching `fortran_out` directory by dataset stem, preferring exact stem folder matches and then newest outputs.
-
-Run the simpler Delorme-style comparison algorithms for one subject:
-
-```bash
-python scripts/run_mica_fastica_picard.py \
-  --dataset-set ~/amica_test_data/mica_release/datasets/cz84.set \
-  --max-iter 1000 \
-  --python-threads 4
-```
-
-This fits scikit-learn FastICA and Picard extended-infomax (`extended=True`, `ortho=False`), saves both fitted estimators as joblib files, records wall-clock fit time, and writes Delorme `getent2`-style mutual-information reduction into `fastica_picard_run.json`.
-
-## All-dataset local runs
-
-If you have a virtual environment activated, you can use the makefile:
-
-```bash
-make fortran-all THREADS=4 MAX_ITER=1000
-make python-all THREADS=4 MAX_ITER=1000
-make fastica-picard-all THREADS=4 MAX_ITER=1000
-```
-
-You can also specify a specific python or python binary:
-
-```bash
-make PYTHON=python3 python-all
-make PYTHON=~/envs/miniforge/amica_env/bin/python python-all
-```
-
-## SLURM: one job per dataset
-
-Each submitted job requests:
-- `--cpus-per-task=4`
-- `--mem=16G`
-- `--time=3:00:00`
-- `--max-iter=2000`
-- `--partition=epyc-64`
-- `--constraint=epyc-7513`
-- Python submitter verbosity defaults to `--verbose 2`
-
-The partition and constraint defaults are for USC CARC Discovery and are used to
-reduce run-to-run performance swings by keeping benchmark jobs on the same CPU
-architecture. When running on another HPC, set these to values that exist on that
-cluster. If your scheduler does not use node constraints, or you do not want to
-pin a CPU model, pass `--constraint none` with the submitters or
-`SLURM_CONSTRAINT=none` with `make`; `none`, `null`, `false`, `0`, and an empty
-string are treated as "do not pass `--constraint`". You can similarly omit
-`--partition` by passing `--partition none`, though most clusters require or
-prefer an explicit partition/queue.
-
-Example for another HPC:
-
-```bash
-python scripts/submit_mica_python_slurm.py \
-  --partition cpu \
-  --constraint none \
-  --threads 4 \
-  --max-iter 2000
-```
-
-Equivalent `make` override:
-
-```bash
-make slurm-python THREADS=4 MAX_ITER=2000 SLURM_PARTITION=cpu SLURM_CONSTRAINT=none
-```
-
-Submit Fortran jobs:
-
-```bash
-make slurm-fortran THREADS=4 MAX_ITER=2000
-```
-
-For Apptainer-backed SLURM submission:
-
-```bash
-make slurm-fortran THREADS=4 MAX_ITER=2000 CONTAINER_RUNTIME=apptainer APPTAINER_IMAGE=/path/to/containers/amica.sif
-```
-
-To run just a single subject:
-
-```bash
-python scripts/submit_mica_fortran_slurm.py \
-  --datasets-dir ~/amica_test_data/mica_release/datasets \
-  --dataset-glob 'cz84.set' \
-  --partition epyc-64 \
-  --constraint epyc-7513 \
-  --threads 4 \
-  --max-iter 2000 \
-  --container-runtime apptainer \
-  --apptainer-image /path/to/containers/amica.sif
-```
- or for python
-
- ```bash
- python scripts/submit_mica_python_slurm.py \
-  --datasets-dir ~/amica_test_data/mica_release/datasets \
-  --dataset-glob 'cz84.set' \
-  --fortran-search-root ./benchmark_runs \
-  --partition epyc-64 \
-  --constraint epyc-7513 \
-  --threads 4 \
-  --max-iter 2000
-```
-
-Submit Python jobs:
-
-```bash
-make slurm-python THREADS=4 MAX_ITER=2000
-```
-
-To submit the Python batch with the DAAREM optimizer, invoke the submitter
-directly and pass `--optimizer daarem`. Use `--accelerator-order` to override
-the AMICA-Python default DAAREM history/order for the run:
-
-```bash
-/Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_python_slurm.py \
-  --datasets-dir ~/amica_test_data/mica_release/datasets \
-  --dataset-glob '*.set' \
-  --bench-root ./benchmark_runs \
-  --fortran-search-root ./benchmark_runs \
-  --threads 4 \
-  --partition epyc-64 \
-  --constraint epyc-7513 \
-  --max-iter 2000 \
-  --optimizer daarem \
-  --accelerator-order 3
-```
-
-The default optimizer is `em`, so omit `--optimizer` or pass `--optimizer em`
-to run the original AMICA-Python optimization path.
-
-To submit a paired golden benchmark, use the triplet submitter. Each SLURM job
-runs Fortran, AMICA-Python EM, and AMICA-Python DAAREM serially for one dataset
-inside the same allocation, reducing node/load variance between methods:
-
-```bash
-cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
-
-CONDA_MODULE=conda \
-CONDA_ENV=amica-benchmark \
-APPTAINER_MODULE=apptainer \
-PYTHON_BIN=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
-/Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_triplet_slurm.py \
-  --datasets-dir ~/amica_test_data/mica_release/datasets \
-  --dataset-glob '*.set' \
-  --bench-root ./benchmark_runs \
-  --run-tag mica_release_triplet_golden \
-  --threads 4 \
-  --partition epyc-64 \
-  --constraint epyc-7513 \
-  --max-iter 2000 \
-  --container-runtime apptainer \
-  --apptainer-image ./amica.sif \
-  --time 10:00:00 \
-  --mem 24G
-```
-
-Within each dataset directory, outputs are written to `fortran/`, `python_em/`,
-and `python_daarem/`. Omit `CONDA_MODULE` and `CONDA_ENV` if the submitted
-`PYTHON_BIN` already works in non-interactive jobs.
-
-To submit one GPU DAAREM hyperparameter sweep job per MICA recording:
-
-```bash
-cd /Users/scotterik/devel/projects/amica-python/amica-benchmark
-
-PYTHON_BIN=/Users/scotterik/miniforge3/envs/amica_env/bin/python \
-/Users/scotterik/miniforge3/envs/amica_env/bin/python scripts/submit_mica_daarem_gpu_slurm.py \
-  --datasets-dir ~/amica_test_data/mica_release/datasets \
-  --dataset-glob '*.set' \
-  --bench-root ./benchmark_runs \
-  --fortran-search-root ./benchmark_runs/mica_release_fortran_slurm_20260509_230036 \
-  --run-tag mica_release_daarem_gpu_sweep \
-  --max-iter 2000 \
-  --n-runs 1 \
-  --partition gpu \
-  --gres gpu:1 \
-  --threads 2 \
-  --mem 24G \
-  --time 4:00:00
-```
-
-The default sweep covers `accelerator_order=1,2,3`,
-`accelerator_start_iter=1,5,10,25`, `accelerator_period=1,2,5,10`, and
-`accelerator_validate_candidate=true,false`, for 96 fits per recording. Each
-recording writes `daarem_sweep.csv`, `daarem_ll_curves.npz`, and
-`daarem_sweep_run.json` under its run directory. Adjust `--partition` and
-`--gres` if your cluster uses different GPU resource names.
-
-Or invoke submitters directly:
-
-```bash
-python scripts/submit_mica_fortran_slurm.py --threads 4 --max-iter 2000 --partition epyc-64 --constraint epyc-7513
-python scripts/submit_mica_python_slurm.py --threads 4 --max-iter 2000 --partition epyc-64 --constraint epyc-7513 --optimizer em
-```
-
-Summarize a completed Fortran/Python benchmark pair:
-
-```bash
-/Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
-  --fortran-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_fortran_slurm_20260419_164625 \
-  --python-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_python_slurm_20260419_174859
-```
-
-Summarize a paired triplet benchmark with Fortran, AMICA-Python EM, and
-AMICA-Python DAAREM runs from the same SLURM allocation:
-
-```bash
-/Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
-  --triplet-batch-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_triplet_golden_20260511_232913
-```
-
-Summarize repeated triplet benchmark runs by averaging each participant across
-runs and plotting the observed runtime range as error bars:
-
-```bash
-/Users/scotterik/miniforge3/envs/amica_env/bin/python /Users/scotterik/devel/projects/amica-python/amica-benchmark/scripts/summarize_benchmark_runs.py \
-  --triplet-batch-glob '/Users/scotterik/devel/projects/amica-python/amica-benchmark/benchmark_runs/mica_release_all_run-?_*' \
-  --output-dir /Users/scotterik/devel/projects/amica-python/amica-benchmark/results/benchmark_summary
-```
+Voila!
